@@ -33,3 +33,4 @@ re/names-*.tsv
 
 # On-screen test captures (game imagery)
 screens/
+__pycache__/
