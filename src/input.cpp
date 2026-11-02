@@ -269,6 +269,23 @@ DWORD WINAPI ScriptThread(void*) {
     return 0;
 }
 
+// ---------------------------------------------------------------------------
+// The Controls screen refuses any key held by a hidden keymap line in 28..76
+// (re/input.md §2): mostly unused leftovers (q, w, e, F1-F3, p, KP-) and the
+// sound toggle on S. With the modern scheme, after every keymap load the
+// unused ones get key code 80 ("KP =", which can never be pressed) and the
+// sound toggle moves from S to F9, so W/S/Q/E can be bound there.
+
+constexpr int kNeverPressed = 80, kKeyS = 39, kKeyF9 = 99, kSoundLine = 37;
+const int kUnusedLines[] = {28, 29, 30, 36, 51, 52, 53, 55};
+void* g_loadKeyMapping;
+
+void LoadKeyMapping() {
+    reinterpret_cast<void (*)()>(g_loadKeyMapping)();
+    for (int line : kUnusedLines) kKeyMapping[line] = kNeverPressed;
+    if (kKeyMapping[kSoundLine] == kKeyS) kKeyMapping[kSoundLine] = kKeyF9;
+}
+
 }  // namespace
 
 void OnDirectInput(void* di) {
@@ -294,6 +311,11 @@ void LoadBindings() {
         n++;
     }
     Log("input: %s scheme, %d actions with their own keys", modern ? "modern" : "classic", n);
+    if (modern) {
+        static const uint8_t start[6] = {0x81, 0xec, 0x00, 0x01, 0x00, 0x00};  // sub esp, 0x100
+        g_loadKeyMapping = hook::Detour(0x487e10, start, 6, (const void*)&LoadKeyMapping);
+        Log("input: unused keymap lines freed, sound toggle on F9: %s", g_loadKeyMapping ? "ok" : "FAILED");
+    }
 }
 
 void StartScript(const char* script) {
