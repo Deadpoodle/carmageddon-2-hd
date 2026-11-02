@@ -4,10 +4,16 @@
 
 #include <cstdarg>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 
+#include "capture.h"
+#include "headless.h"
 #include "hook.h"
+#include "input.h"
+#include "loader.h"
+#include "log.h"
 
 namespace {
 
@@ -15,19 +21,7 @@ const char* kVersion = "0.0.1";
 
 std::string g_dir;  // game folder, with trailing backslash
 FILE* g_log;
-
-void Log(const char* fmt, ...) {
-    if (!g_log) return;
-    SYSTEMTIME t;
-    GetLocalTime(&t);
-    fprintf(g_log, "%02d:%02d:%02d.%03d ", t.wHour, t.wMinute, t.wSecond, t.wMilliseconds);
-    va_list ap;
-    va_start(ap, fmt);
-    vfprintf(g_log, fmt, ap);
-    va_end(ap);
-    fputc('\n', g_log);
-    fflush(g_log);
-}
+CRITICAL_SECTION g_logLock;
 
 // The Steam CARMA2_HW.EXE (build 266224): its command-line switch strings sit
 // at fixed addresses. Anything else gets no patches.
@@ -40,7 +34,7 @@ bool IsKnownExe() {
 }
 
 std::string Env(const char* name) {
-    char buf[256];
+    char buf[1024];
     DWORD n = GetEnvironmentVariableA(name, buf, sizeof buf);
     return n && n < sizeof buf ? std::string(buf, n) : std::string();
 }
@@ -59,12 +53,50 @@ HWND WINAPI ExitAtCreateWindow(DWORD ex, LPCSTR cls, LPCSTR title, DWORD style, 
     Log("CreateWindowExA class=%s title=%s style=0x%08lx ex=0x%08lx %d,%d %dx%d", cls ? cls : "(null)",
         title ? title : "(null)", style, ex, x, y, w, h);
     Log("test exit before the window is created");
-    if (g_log) fclose(g_log);
     TerminateProcess(GetCurrentProcess(), 0);
     return real_CreateWindowExA(ex, cls, title, style, x, y, w, h, parent, menu, inst, param);
 }
 
+// C2HD_SHOTS=<ms>: a back-buffer shot every so often.
+DWORD WINAPI ShotThread(void* p) {
+    DWORD every = (DWORD)(uintptr_t)p;
+    for (;;) {
+        Sleep(every);
+        capture::Request();
+    }
+}
+
+// C2HD_QUIT=<seconds>: end the run.
+DWORD WINAPI QuitThread(void* p) {
+    Sleep((DWORD)(uintptr_t)p * 1000);
+    Log("test: quit after %u s", (unsigned)(uintptr_t)p);
+    TerminateProcess(GetCurrentProcess(), 0);
+    return 0;
+}
+
+void StartTests() {
+    if (Env("C2HD_TEST_EXIT") == "window") {
+        bool ok = hook::Import(hook::FindImport(nullptr, "USER32.dll", "CreateWindowExA"), &ExitAtCreateWindow,
+                               &real_CreateWindowExA);
+        Log("test: exit at CreateWindowExA (%s)", ok ? "hooked" : "hook FAILED");
+        if (!ok) TerminateProcess(GetCurrentProcess(), 1);  // never let a test reach the screen
+    }
+    if (Env("C2HD_HEADLESS") != "1") return;
+    if (!headless::Install()) {
+        Log("test: headless hooks failed; ending the run");
+        TerminateProcess(GetCurrentProcess(), 1);
+    }
+    capture::Install();
+    if (int ms = atoi(Env("C2HD_SHOTS").c_str()))
+        CloseHandle(CreateThread(nullptr, 0, &ShotThread, (void*)(uintptr_t)ms, 0, nullptr));
+    int quit = atoi(Env("C2HD_QUIT").c_str());
+    CloseHandle(CreateThread(nullptr, 0, &QuitThread, (void*)(uintptr_t)(quit > 0 ? quit : 60), 0, nullptr));
+    std::string keys = Env("C2HD_KEYS");
+    if (!keys.empty()) input::StartScript(keys.c_str());
+}
+
 void Start() {
+    InitializeCriticalSection(&g_logLock);
     char path[MAX_PATH];
     GetModuleFileNameA(nullptr, path, MAX_PATH);
     g_dir = path;
@@ -76,15 +108,28 @@ void Start() {
         Log("unrecognised exe: no patches applied");
         return;
     }
-    if (Env("C2HD_TEST_EXIT") == "window") {
-        bool ok = hook::Import(hook::FindImport(nullptr, "USER32.dll", "CreateWindowExA"), &ExitAtCreateWindow,
-                               &real_CreateWindowExA);
-        Log("test: exit at CreateWindowExA (%s)", ok ? "hooked" : "hook FAILED");
-        if (!ok) TerminateProcess(GetCurrentProcess(), 1);  // never let a test reach the screen
-    }
+    if (!loader::Install()) Log("loader hooks FAILED");
+    StartTests();
 }
 
 }  // namespace
+
+void Log(const char* fmt, ...) {
+    if (!g_log) return;
+    EnterCriticalSection(&g_logLock);
+    SYSTEMTIME t;
+    GetLocalTime(&t);
+    fprintf(g_log, "%02d:%02d:%02d.%03d ", t.wHour, t.wMinute, t.wSecond, t.wMilliseconds);
+    va_list ap;
+    va_start(ap, fmt);
+    vfprintf(g_log, fmt, ap);
+    va_end(ap);
+    fputc('\n', g_log);
+    fflush(g_log);
+    LeaveCriticalSection(&g_logLock);
+}
+
+const std::string& GameDir() { return g_dir; }
 
 BOOL WINAPI DllMain(HINSTANCE, DWORD reason, LPVOID) {
     if (reason == DLL_PROCESS_ATTACH) Start();

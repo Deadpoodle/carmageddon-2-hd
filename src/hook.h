@@ -25,9 +25,13 @@ inline uintptr_t FindImport(HMODULE module, const char* dll, const char* name) {
     uint8_t* base = (uint8_t*)(module ? module : GetModuleHandleA(nullptr));
     auto* nt = (IMAGE_NT_HEADERS*)(base + ((IMAGE_DOS_HEADER*)base)->e_lfanew);
     auto& dir = nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+    if (!dir.VirtualAddress) return 0;
     for (auto* d = (IMAGE_IMPORT_DESCRIPTOR*)(base + dir.VirtualAddress); d->Name; d++) {
         if (lstrcmpiA((char*)(base + d->Name), dll) != 0) continue;
-        auto* names = (IMAGE_THUNK_DATA*)(base + (d->OriginalFirstThunk ? d->OriginalFirstThunk : d->FirstThunk));
+        // Without the name table (packed modules) the bound slots hold
+        // addresses, not names: nothing can be found by name.
+        if (!d->OriginalFirstThunk) return 0;
+        auto* names = (IMAGE_THUNK_DATA*)(base + d->OriginalFirstThunk);
         auto* slots = (IMAGE_THUNK_DATA*)(base + d->FirstThunk);
         for (; names->u1.AddressOfData; names++, slots++) {
             if (IMAGE_SNAP_BY_ORDINAL(names->u1.Ordinal)) continue;

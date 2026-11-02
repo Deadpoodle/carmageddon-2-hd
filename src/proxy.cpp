@@ -4,6 +4,9 @@
 // to the real dinput.dll from the system folder.
 #include <windows.h>
 
+#include "input.h"
+#include "log.h"
+
 static HMODULE real_dinput;
 
 static FARPROC real(const char* name) {
@@ -23,7 +26,15 @@ static FARPROC real(const char* name) {
         return fn ? fn args : E_FAIL;                     \
     }
 
-FORWARD(DirectInputCreateA, (HINSTANCE inst, DWORD ver, void** out, IUnknown* outer), (inst, ver, out, outer))
+// The game's own call: the interface it gets back goes to input.cpp first.
+extern "C" HRESULT WINAPI proxy_DirectInputCreateA(HINSTANCE inst, DWORD ver, void** out, IUnknown* outer) {
+    typedef HRESULT(WINAPI * fn_t)(HINSTANCE, DWORD, void**, IUnknown*);
+    static fn_t fn = (fn_t)real("DirectInputCreateA");
+    HRESULT hr = fn ? fn(inst, ver, out, outer) : E_FAIL;
+    Log("DirectInputCreateA(version %#lx) = %#lx", (unsigned long)ver, (unsigned long)hr);
+    if (SUCCEEDED(hr) && out) input::OnDirectInput(*out);
+    return hr;
+}
 FORWARD(DirectInputCreateW, (HINSTANCE inst, DWORD ver, void** out, IUnknown* outer), (inst, ver, out, outer))
 FORWARD(DirectInputCreateEx, (HINSTANCE inst, DWORD ver, REFIID iid, void** out, IUnknown* outer),
         (inst, ver, iid, out, outer))
