@@ -86,7 +86,6 @@ void Install() {
             ok &= hook::PatchU32(game::GrafSpec640 + 0x28, 640, (uint32_t)ww);
         }
         Log("display: EXPERIMENT device width %d (%s)", ww, ok ? "patched" : "FAILED");
-        dgvconf::Sync({{"DirectXExt", "ExtraEnumeratedResolutions", std::to_string(ww) + "x480"}});
     }
 
     if (s.widescreen && !hook::Redirect(game::CallInitialiseCameras, 0xe8, game::InitialiseCameras,
