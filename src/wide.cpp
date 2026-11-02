@@ -129,7 +129,12 @@ void PatchLayout() {
     Add32(0x655ee8, 334, C);    // timer right
     Add32(0x655f24, 298, C);    // power (network)
     Add32(0x655e6c, 68, C);     // bottom bar (BOTHUP)
-    Add32(0x655ef4, 398, R);    // statbar right
+    // The two flat-colour panels next to the timer (no texture: colour
+    // 0x040e4a at 44% opacity) are widened to meet it, so the top banner
+    // stays one continuous strip as in 640x480 (re/hud-gaps.md).
+    Add32(0x655eac, 142, C - L);  // statbar 3 width: up to the timer
+    Add32(0x655ef4, 398, C);      // statbar right starts at the timer's right edge
+    Add32(0x655eec, 178, R - C);  // ... and reaches the right-anchored panels
     Add32(0x655ed0, 576, R);    // statbar 5 (damage icons)
     Add32(0x655f34, 448, R);    // offence (network)
     Add32(0x655ec4, 384, R);    // HUD square
