@@ -16,6 +16,7 @@
 #include "hook.h"
 #include "input.h"
 #include "loader.h"
+#include "movie.h"
 #include "options.h"
 #include "log.h"
 #include "settings.h"
@@ -159,6 +160,7 @@ void Start() {
     hdtab::Install();
     controller::Install();
     display::Install();
+    movie::Install();
     StartTests();
 }
 

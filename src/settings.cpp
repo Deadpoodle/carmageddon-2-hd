@@ -34,6 +34,8 @@ const char* kDefaultIni =
     "Colour=smooth\r\n"
     "; auto = your screen's refresh rate, never above 100 (the game runs too fast above 100); or 60\r\n"
     "FrameRate=auto\r\n"
+    "; Cutscenes: enhanced (enlarged 4x with Lanczos and lightly sharpened) or original\r\n"
+    "Movies=enhanced\r\n"
     "\r\n"
     "[Controls]\r\n"
     "; classic = the game's own keys (its default set drives on the numeric keypad)\r\n"
