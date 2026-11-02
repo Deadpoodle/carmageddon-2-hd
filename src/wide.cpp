@@ -19,6 +19,7 @@
 #include <cstring>
 #include <string>
 
+#include "frontend.h"
 #include "game.h"
 #include "hook.h"
 #include "loader.h"
@@ -200,7 +201,9 @@ void* g_saveOptions;
 
 void LoadOptions() {
     reinterpret_cast<void (*)()>(0x48d8f0)();
-    g_mapShift = *kHeadupMapX + *kHeadupMapW / 2 > 320 ? g_right : g_left;
+    // InitMiniMap snaps x to a multiple of 4, so the shift is one too, or
+    // every save would move the map a few pixels.
+    g_mapShift = (*kHeadupMapX + *kHeadupMapW / 2 > 320 ? g_right : g_left) & ~3;
     *kHeadupMapX += g_mapShift;
     Log("wide: minimap x %d (+%d)", *kHeadupMapX, g_mapShift);
 }
@@ -266,6 +269,7 @@ bool Install(int w, int hud) {
     }
     loader::OnResolve(&PatchDriver);
     PatchLayout();
+    frontend::Install(w);
     bool ok = hook::Redirect(0x489d5e, 0xe8, 0x48ba60, (const void*)&LoadHeadupSlots) &&
               hook::Redirect(0x489d6b, 0xe8, 0x48ba60, (const void*)&LoadHeadupSlots) &&
               hook::Redirect(0x47de15, 0xe8, 0x48d8f0, (const void*)&LoadOptions);
