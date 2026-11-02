@@ -6,7 +6,7 @@ namespace headless {
 
 // C2HD_HEADLESS=1. Installs the window, focus and safety hooks on the exe.
 // Returns false (and the caller ends the process) if a hook can't be placed.
-bool Install();
+bool Install(bool visible = false);
 
 bool Active();
 HWND Window();

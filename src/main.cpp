@@ -124,8 +124,9 @@ void StartTests() {
         Log("test: exit at CreateWindowExA (%s)", ok ? "hooked" : "hook FAILED");
         if (!ok) TerminateProcess(GetCurrentProcess(), 1);  // never let a test reach the screen
     }
-    if (Env("C2HD_HEADLESS") != "1") return;
-    if (!headless::Install()) {
+    std::string mode = Env("C2HD_HEADLESS");
+    if (mode != "1" && mode != "2") return;
+    if (!headless::Install(mode == "2")) {
         Log("test: headless hooks failed; ending the run");
         TerminateProcess(GetCurrentProcess(), 1);
     }

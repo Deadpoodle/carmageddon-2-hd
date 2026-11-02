@@ -30,3 +30,6 @@ patches/
 third_party/
 re/ghidra-export-*/
 re/names-*.tsv
+
+# On-screen test captures (game imagery)
+screens/

@@ -32,6 +32,7 @@ namespace headless {
 namespace {
 
 bool g_active;
+bool g_visible;  // C2HD_HEADLESS=2: an on-screen test (scripted, but the window is left alone)
 HWND g_hwnd;
 constexpr int kOff = -32000;
 const char* kWindowClass = "Carma2MainWndClass";
@@ -94,10 +95,16 @@ LRESULT WINAPI h_SendMessageA(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     return o_SendMessageA(hwnd, msg, wp, lp);
 }
 
-HWND WINAPI h_CreateWindowExA(DWORD ex, LPCSTR cls, LPCSTR name, DWORD style, int, int, int w, int h, HWND parent,
+HWND WINAPI h_CreateWindowExA(DWORD ex, LPCSTR cls, LPCSTR name, DWORD style, int x, int y, int w, int h, HWND parent,
                               HMENU menu, HINSTANCE inst, LPVOID param) {
     bool game = !parent && HIWORD(cls) && strcmp(cls, kWindowClass) == 0;
     cls = TestClass(cls);
+    if (g_visible) {
+        HWND hwnd = o_CreateWindowExA(ex, cls, name, style, x, y, w, h, parent, menu, inst, param);
+        if (hwnd && game) g_hwnd = hwnd;
+        Log("headless (on screen): window %p", (void*)hwnd);
+        return hwnd;
+    }
     HWND hwnd = o_CreateWindowExA(ex | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW, cls, name, style & ~WS_VISIBLE, kOff, kOff,
                                   w, h, parent, menu, inst, param);
     if (hwnd && game) {
@@ -229,9 +236,19 @@ void OnLoadLibrary(const char* name, HMODULE module) {
     }
 }
 
-bool Install() {
+bool Install(bool visible) {
     g_active = true;
+    g_visible = visible;
     if (!ConfigIsWindowed()) Abort("dgVoodoo.conf in the game folder must say FullScreenMode = false");
+    if (visible) {  // scripted input, test class, mute and logged message boxes; the window is left alone
+        bool ok = HookUser32(nullptr, "CreateWindowExA", &h_CreateWindowExA, &o_CreateWindowExA) &&
+                  HookUser32(nullptr, "MessageBoxA", &h_MessageBoxA, &o_MessageBoxA) &&
+                  HookUser32(nullptr, "RegisterClassA", &h_RegisterClassA, &o_RegisterClassA) &&
+                  HookUser32(nullptr, "SendMessageA", &h_SendMessageA, &o_SendMessageA);
+        Log("headless (on screen): hooks %s", ok ? "ok" : "FAILED");
+        if (ok) CloseHandle(CreateThread(nullptr, 0, &MuteThread, nullptr, 0, nullptr));
+        return ok;
+    }
     bool ok = HookUser32(nullptr, "CreateWindowExA", &h_CreateWindowExA, &o_CreateWindowExA) &&
               HookUser32(nullptr, "SetWindowPos", &h_SetWindowPos, &o_SetWindowPos) &&
               HookUser32(nullptr, "SetForegroundWindow", &h_SetForegroundWindow, &o_SetForegroundWindow) &&
