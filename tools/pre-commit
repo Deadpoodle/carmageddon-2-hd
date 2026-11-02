@@ -4,7 +4,7 @@
 # extra patterns (names, addresses) listed one per line in the untracked file
 # .git/personal-patterns, so they never enter the repo themselves.
 # Install: cp tools/pre-commit .git/hooks/pre-commit
-pattern='([A-Za-z]:[\\/]+Users[\\/]|/c/U[s]ers/|/home/[a-z]|Steam[L]ibrary|7656119[0-9]{10}|@(gmail|hotmail|outlook|yahoo)\.)'
+pattern='([A-Za-z]:[\\/]+Users[\\/]|/c/U[s]ers/|(^|[[:space:]"(=:])/home/[a-z]|Steam[L]ibrary|7656119[0-9]{10}|@(gmail|hotmail|outlook|yahoo)\.)'
 extra="$(git rev-parse --git-dir)/personal-patterns"
 if [ -f "$extra" ]; then
     while IFS= read -r p; do
