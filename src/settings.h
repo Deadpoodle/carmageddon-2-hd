@@ -14,6 +14,9 @@ struct Display {
 void Load();
 const Display& GetDisplay();
 
+// Any key from Carma2HD.ini (def when missing).
+std::string Get(const char* section, const char* key, const char* def);
+
 // The size the game is shown at: the configured one, or the desktop's.
 void OutputSize(int* w, int* h);
 

@@ -21,7 +21,8 @@
 namespace frontend {
 
 int g_w = 640, g_xo;
-volatile LONG g_scope;  // > 0 while a front-end loop or screen runs
+volatile LONG g_scope;    // > 0 while a front-end loop or screen runs
+volatile LONG g_capture;  // > 0 while the Controls screen waits for a key
 
 namespace {
 
@@ -36,15 +37,18 @@ int16_t& BackOriginX() { return *(int16_t*)(*kBackScreen + kOriginX); }
 
 // ---------------------------------------------------------------------------
 // Scope thunks: one per wrapped function, whatever its calling convention.
-// On entry the real return address is pushed onto a private stack and
-// replaced by the exit path; the exit path pops it and jumps back. Registers
-// and stack arguments pass through untouched; the game is single-threaded
-// here, and nested scopes (a pause menu over a Smacker...) stack up.
+// On entry the real return address and the thunk's counter are pushed onto a
+// private stack, the counter is raised and the return address is replaced by
+// the exit path, which lowers the counter and jumps back. Registers and stack
+// arguments pass through untouched; the game is single-threaded here, and
+// nested scopes (a pause menu over a Smacker...) stack up.
 extern "C" {
 uintptr_t c2hd_scopeRets[64];
+volatile LONG* c2hd_scopeCounters[64];
 volatile LONG c2hd_scopeTop;
 uintptr_t c2hd_scopeJump;
-void* c2hd_scopeTramp[4];
+void* c2hd_scopeTramp[5];
+volatile LONG* c2hd_scopeCounter[5];
 }
 
 #define SCOPE_THUNK(n)                                                    \
@@ -56,8 +60,10 @@ void* c2hd_scopeTramp[4];
         "  mov ecx, dword ptr [_c2hd_scopeTop]\n"                         \
         "  mov eax, dword ptr [esp+8]\n"                                  \
         "  mov dword ptr [_c2hd_scopeRets+ecx*4], eax\n"                  \
+        "  mov eax, dword ptr [_c2hd_scopeCounter+" #n "*4]\n"            \
+        "  mov dword ptr [_c2hd_scopeCounters+ecx*4], eax\n"              \
+        "  lock inc dword ptr [eax]\n"                                    \
         "  inc dword ptr [_c2hd_scopeTop]\n"                              \
-        "  lock inc dword ptr [__ZN8frontend7g_scopeE]\n"                 \
         "  mov dword ptr [esp+8], offset _c2hd_scopeExit\n"               \
         "  pop ecx\n"                                                     \
         "  pop eax\n"                                                     \
@@ -68,14 +74,16 @@ SCOPE_THUNK(0)
 SCOPE_THUNK(1)
 SCOPE_THUNK(2)
 SCOPE_THUNK(3)
+SCOPE_THUNK(4)
 
 asm(".intel_syntax noprefix\n"
     "_c2hd_scopeExit:\n"
     "  push eax\n"
     "  push ecx\n"
-    "  lock dec dword ptr [__ZN8frontend7g_scopeE]\n"
     "  dec dword ptr [_c2hd_scopeTop]\n"
     "  mov ecx, dword ptr [_c2hd_scopeTop]\n"
+    "  mov eax, dword ptr [_c2hd_scopeCounters+ecx*4]\n"
+    "  lock dec dword ptr [eax]\n"
     "  mov eax, dword ptr [_c2hd_scopeRets+ecx*4]\n"
     "  mov dword ptr [_c2hd_scopeJump], eax\n"
     "  pop ecx\n"
@@ -87,6 +95,7 @@ extern "C" void c2hd_scope0();
 extern "C" void c2hd_scope1();
 extern "C" void c2hd_scope2();
 extern "C" void c2hd_scope3();
+extern "C" void c2hd_scope4();
 
 namespace frontend {
 namespace {
@@ -174,24 +183,30 @@ void Check(bool ok, const char* what) {
 
 }  // namespace
 
+bool InMenu() { return g_scope > 0; }
+bool InKeyCapture() { return g_capture > 0; }
+
 void Install(int w) {
     g_w = w;
     g_xo = (w - 640) / 2;
 
     // Scopes: the front-end loop (also the pause menu and key capture), Smacker
-    // movies, the loading screen, the message screen.
+    // movies, the loading screen, the message screen; and the Controls screen's
+    // wait for a new key (the input layer passes real keys through there).
     struct Scope {
         uintptr_t fn;
         uint8_t bytes[8];
         size_t n;
         void (*thunk)();
-    } scopes[4] = {
+    } scopes[5] = {
         {0x46d8e0, {0xa1, 0x28, 0x23, 0x76, 0x00}, 5, &c2hd_scope0},
         {0x43e770, {0x81, 0xec, 0x2c, 0x01, 0x00, 0x00}, 6, &c2hd_scope1},
         {0x47b990, {0x53, 0x56, 0x57, 0x8b, 0xf9}, 5, &c2hd_scope2},
         {0x4a0080, {0x83, 0xec, 0x10, 0x53, 0x55}, 5, &c2hd_scope3},
+        {0x472b00, {0x83, 0xec, 0x0c, 0xa1, 0x70, 0x87, 0x68, 0x00}, 8, &c2hd_scope4},  // Controls_GetNewKey
     };
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 5; i++) {
+        c2hd_scopeCounter[i] = i == 4 ? &g_capture : &g_scope;
         c2hd_scopeTramp[i] = hook::Detour(scopes[i].fn, scopes[i].bytes, scopes[i].n, (const void*)scopes[i].thunk);
         Check(c2hd_scopeTramp[i] != nullptr, "scope detour");
     }

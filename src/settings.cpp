@@ -21,7 +21,24 @@ const char* kDefaultIni =
     "; 1 = the view widens to fill the screen (Hor+); 0 = the original 4:3 view, with black bars at the sides\r\n"
     "Widescreen=1\r\n"
     "; How far the HUD spreads on a wide screen: auto (the screen's width, up to 21:9), full, 4:3, 16:9 or 21:9\r\n"
-    "HudWidth=auto\r\n";
+    "HudWidth=auto\r\n"
+    "\r\n"
+    "[Controls]\r\n"
+    "; classic = the game's own keys (its default set drives on the numeric keypad)\r\n"
+    "; modern  = drive with W/A/S/D or the arrows, Space handbrake, and the keys listed under [Keys];\r\n"
+    ";           W/A/S/D also move around the menus\r\n"
+    "Scheme=classic\r\n"
+    "\r\n"
+    "[Keys]\r\n"
+    "; Extra keys for any action, in either scheme: Action=KEY,KEY (DirectInput key names:\r\n"
+    "; W, UP, SPACE, LSHIFT, LCONTROL, RETURN, NUMPAD8, F1 ...). An empty value removes the scheme's keys.\r\n"
+    "; Each key listed here does only that action; the game's own key for the action still works.\r\n"
+    "; Actions: Accelerate Brake Left Right Handbrake Wheelspin Repair Recover UsePowerup PowerupPrev\r\n"
+    ";   PowerupNext PowerupList Camera Map MiniMap Horn Replay LookUp LookDown LookLeft LookRight\r\n"
+    ";   HudDetail Chat TargetLock CycleTarget BuyArmour BuyPower BuyOffence NetPlayers\r\n"
+    "; The modern scheme's keys: Accelerate=W,UP  Brake=S,DOWN  Left=A,LEFT  Right=D,RIGHT\r\n"
+    ";   Handbrake=SPACE  Repair=F  Recover=R  UsePowerup=E  PowerupNext=Q  Camera=C  Replay=P\r\n"
+    ";   LookUp=I  LookDown=K  LookLeft=J  LookRight=L\r\n";
 
 std::string IniPath() { return GameDir() + "Carma2HD.ini"; }
 
@@ -60,6 +77,8 @@ void Load() {
 }
 
 const Display& GetDisplay() { return g_display; }
+
+std::string Get(const char* section, const char* key, const char* def) { return IniString(section, key, def); }
 
 void OutputSize(int* w, int* h) {
     if (g_display.width) {

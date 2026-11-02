@@ -21,6 +21,7 @@
 #include <string>
 
 #include "dgvconf.h"
+#include "frontend.h"
 #include "game.h"
 #include "hook.h"
 #include "log.h"
@@ -73,6 +74,7 @@ void Install() {
         if (w43 > w) w43 = w, h = w * 3 / 4;
         res = std::to_string(w43) + "x" + std::to_string(h);
         dgvconf::Sync({{"DirectX", "Resolution", res}, {"General", "ScalingMode", "stretched_ar"}});
+        frontend::Install(640);
         Log("display: output %s, 640x480 (4:3)", res.c_str());
         return;
     }
@@ -92,6 +94,7 @@ void Install() {
 
     // Fallback: 640x480 stretched to the screen, with the view widened.
     g_aspect = (float)shape;
+    frontend::Install(640);
     dgvconf::Sync({{"DirectX", "Resolution", res}, {"General", "ScalingMode", "stretched_ar"}});
     if (!hook::Redirect(game::CallInitialiseCameras, 0xe8, game::InitialiseCameras, (const void*)&InitialiseCameras))
         Log("display: camera hook FAILED (unexpected bytes at %#x)", (unsigned)game::CallInitialiseCameras);

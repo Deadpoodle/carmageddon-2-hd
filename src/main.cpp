@@ -150,6 +150,7 @@ void Start() {
     }
     if (!loader::Install()) Log("loader hooks FAILED");
     settings::Load();
+    input::LoadBindings();
     display::Install();
     StartTests();
 }

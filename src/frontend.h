@@ -4,7 +4,13 @@
 
 namespace frontend {
 
-// Before the game runs, with the buffer width (> 640).
+// Before the game runs, with the buffer width (640 = stock: nothing moves,
+// but the scopes and the mouse mapping are still installed).
 void Install(int w);
+
+// A front-end screen (menus, pause menu, loading...) is running.
+bool InMenu();
+// The Controls screen is waiting for a key to bind.
+bool InKeyCapture();
 
 }  // namespace frontend
