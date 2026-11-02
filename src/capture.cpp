@@ -94,7 +94,17 @@ void Save(LPDIRECTDRAWSURFACE surf) {
 
 HRESULT WINAPI h_Flip(LPDIRECTDRAWSURFACE s, LPDIRECTDRAWSURFACE target, DWORD flags) {
     if (s == g_primary) {
-        if (InterlockedIncrement(&g_flips) == 1) Log("capture: first Flip on the primary");
+        LONG n = InterlockedIncrement(&g_flips);
+        if (n == 1) Log("capture: first Flip on the primary");
+        static DWORD since;
+        static LONG sinceFlips;
+        DWORD now = GetTickCount();
+        if (!since) since = now;
+        if (now - since >= 5000) {  // frames presented per second, every 5 s
+            Log("capture: %.1f fps", (n - sinceFlips) * 1000.0 / (now - since));
+            since = now;
+            sinceFlips = n;
+        }
         if (InterlockedExchange(&g_pending, 0)) {
             DDSCAPS caps = {DDSCAPS_BACKBUFFER};
             LPDIRECTDRAWSURFACE back = nullptr;

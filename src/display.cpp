@@ -17,8 +17,10 @@
 
 #include <windows.h>
 
+#include <cctype>
 #include <cmath>
 #include <string>
+#include <vector>
 
 #include "dgvconf.h"
 #include "frontend.h"
@@ -51,6 +53,44 @@ void InitialiseCameras() {
 
 int EvenAt480(double aspect) { return 2 * (int)std::lround(480.0 * aspect / 2.0); }
 
+std::string Lower(std::string s) {
+    for (char& c : s) c = (char)tolower((unsigned char)c);
+    return s;
+}
+
+// [Visuals]: dgVoodoo2's anti-aliasing, texture filtering and mipmaps, 16-bit
+// dithering, and the frame cap. The game has no frame limiter and its physics
+// treat any frame under 10 ms as 10 ms (UpdateFramePeriod 0x492680), so above
+// 100 fps it runs fast: the cap never goes over 100.
+std::vector<dgvconf::Key> VisualKeys() {
+    std::string aa = Lower(settings::Get("Visuals", "Antialiasing", "4x"));
+    if (aa != "2x" && aa != "4x" && aa != "8x") aa = "off";
+    std::string tex = Lower(settings::Get("Visuals", "Textures", "sharpest"));
+    std::string filtering = tex == "sharpest" ? "16" : tex == "smooth" ? "trilinear" : "appdriven";
+    std::string mip = tex == "original" ? "appdriven" : "autogen_bilinear";
+    bool smooth = Lower(settings::Get("Visuals", "Colour", "smooth")) != "16-bit";
+    std::string rate = Lower(settings::Get("Visuals", "FrameRate", "auto"));
+    DEVMODEA dm = {};
+    dm.dmSize = sizeof dm;
+    int hz = EnumDisplaySettingsA(nullptr, ENUM_CURRENT_SETTINGS, &dm) && dm.dmDisplayFrequency > 1
+                 ? (int)dm.dmDisplayFrequency : 60;
+    int cap = rate == "60" ? 60 : (hz < 100 ? hz : 100);
+    bool vsync = cap == hz;  // tear-free when the screen's own rate is within the cap
+    Log("display: visuals: AA %s, filtering %s, mipmaps %s, colour %s, %d fps cap (screen %d Hz, vsync %s)",
+        aa.c_str(), filtering.c_str(), mip.c_str(), smooth ? "smooth" : "16-bit", cap, hz, vsync ? "on" : "off");
+    return {{"DirectX", "Antialiasing", aa},
+            {"DirectX", "Filtering", filtering},
+            {"DirectX", "Mipmapping", mip},
+            {"DirectXExt", "Dithering", smooth ? "disabled" : "appdriven"},
+            {"GeneralExt", "FPSLimit", std::to_string(cap)},
+            {"DirectX", "ForceVerticalSync", vsync ? "true" : "false"}};
+}
+
+std::vector<dgvconf::Key> With(std::vector<dgvconf::Key> keys) {
+    for (auto& k : VisualKeys()) keys.push_back(k);
+    return keys;
+}
+
 }  // namespace
 
 void Install() {
@@ -73,7 +113,7 @@ void Install() {
         int w43 = h * 4 / 3;
         if (w43 > w) w43 = w, h = w * 3 / 4;
         res = std::to_string(w43) + "x" + std::to_string(h);
-        dgvconf::Sync({{"DirectX", "Resolution", res}, {"General", "ScalingMode", "stretched_ar"}});
+        dgvconf::Sync(With({{"DirectX", "Resolution", res}, {"General", "ScalingMode", "stretched_ar"}}));
         frontend::Install(640);
         Log("display: output %s, 640x480 (4:3)", res.c_str());
         return;
@@ -85,9 +125,9 @@ void Install() {
     double hudShape = s.hudAspect > 0 ? s.hudAspect : (shape < 21.0 / 9.0 ? shape : 21.0 / 9.0);
     int hudW = EvenAt480(hudShape > 10 ? 10 : hudShape);
     if (wide::DriverFileMatches() && wide::Install(bufW, hudW)) {
-        dgvconf::Sync({{"DirectX", "Resolution", res},
+        dgvconf::Sync(With({{"DirectX", "Resolution", res},
                        {"General", "ScalingMode", "stretched_ar"},
-                       {"DirectXExt", "ExtraEnumeratedResolutions", std::to_string(bufW) + "x480"}});
+                       {"DirectXExt", "ExtraEnumeratedResolutions", std::to_string(bufW) + "x480"}}));
         Log("display: output %s, buffer %dx480 (Hor+)", res.c_str(), bufW);
         return;  // the game sets the camera aspect from the buffer itself
     }
@@ -95,7 +135,7 @@ void Install() {
     // Fallback: 640x480 stretched to the screen, with the view widened.
     g_aspect = (float)shape;
     frontend::Install(640);
-    dgvconf::Sync({{"DirectX", "Resolution", res}, {"General", "ScalingMode", "stretched_ar"}});
+    dgvconf::Sync(With({{"DirectX", "Resolution", res}, {"General", "ScalingMode", "stretched_ar"}}));
     if (!hook::Redirect(game::CallInitialiseCameras, 0xe8, game::InitialiseCameras, (const void*)&InitialiseCameras))
         Log("display: camera hook FAILED (unexpected bytes at %#x)", (unsigned)game::CallInitialiseCameras);
     Log("display: D3D.BDD not the expected driver: output %s, 640x480 stretched, view aspect %.4f", res.c_str(),

@@ -70,9 +70,14 @@ const Row kRows[] = {
     {"Controls:", 160, {"Classic", "Modern"}, {250, 330}},
     {"Pedestrians:", 180, {"Humans", "Zombies", "Aliens"}, {250, 330, 410}},
     {"Draw distance:", 200, {"Original", "Far", "Further", "Max"}, {250, 330, 410, 490}},
+    {"Anti-aliasing:", 220, {"Off", "2x", "4x", "8x"}, {250, 330, 410, 490}},
+    {"Textures:", 240, {"Original", "Smooth", "Sharpest"}, {250, 330, 410}},
+    {"Colour:", 260, {"16-bit", "Smooth"}, {250, 330}},
+    {"Frame rate:", 280, {"60", "Auto"}, {250, 330}},
 };
-constexpr int kRowCount = 6, kFirstGroup = 15;
-enum { kResolution, kWidescreen, kHudWidth, kControls, kPedestrians, kDrawDistance };
+constexpr int kRowCount = 10, kFirstGroup = 15;
+enum { kResolution, kWidescreen, kHudWidth, kControls, kPedestrians, kDrawDistance, kAntialiasing, kTextures,
+       kColour, kFrameRate };
 const float kYon[4] = {0, 50.0f, 70.0f, 100.0f};  // Original keeps the game's own
 
 int g_first[kRowCount], g_words[kRowCount];  // first word item and word count per row
@@ -154,6 +159,10 @@ int Current(int r) {
     case kPedestrians: return 0;
     case kDrawDistance:
         return Index(settings::Get("Display", "DrawDistance", "max"), {"original", "far", "further", "max"});
+    case kAntialiasing: return Index(settings::Get("Visuals", "Antialiasing", "4x"), {"off", "2x", "4x", "8x"});
+    case kTextures: return Index(settings::Get("Visuals", "Textures", "sharpest"), {"original", "smooth", "sharpest"});
+    case kColour: return Index(settings::Get("Visuals", "Colour", "smooth"), {"16-bit", "smooth"});
+    case kFrameRate: return Index(settings::Get("Visuals", "FrameRate", "auto"), {"60", "auto"});
     }
     return -1;
 }
@@ -168,6 +177,10 @@ void Store(int r, int v) {
     case kHudWidth: settings::Set("Display", "HudWidth", hud[v]); break;
     case kControls: settings::Set("Controls", "Scheme", v ? "modern" : "classic"); break;
     case kDrawDistance: settings::Set("Display", "DrawDistance", dd[v]); break;
+    case kAntialiasing: settings::Set("Visuals", "Antialiasing", kRows[r].words[v]); break;
+    case kTextures: settings::Set("Visuals", "Textures", kRows[r].words[v]); break;
+    case kColour: settings::Set("Visuals", "Colour", kRows[r].words[v]); break;
+    case kFrameRate: settings::Set("Visuals", "FrameRate", kRows[r].words[v]); break;
     }
 }
 
