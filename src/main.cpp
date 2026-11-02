@@ -9,11 +9,13 @@
 #include <string>
 
 #include "capture.h"
+#include "display.h"
 #include "headless.h"
 #include "hook.h"
 #include "input.h"
 #include "loader.h"
 #include "log.h"
+#include "settings.h"
 
 namespace {
 
@@ -109,6 +111,8 @@ void Start() {
         return;
     }
     if (!loader::Install()) Log("loader hooks FAILED");
+    settings::Load();
+    display::Install();
     StartTests();
 }
 
