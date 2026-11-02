@@ -1,0 +1,32 @@
+#!/bin/sh
+# Refuse commits that would put personal information in the repo: local user
+# paths, Steam IDs, personal email domains, a non-noreply author, plus any
+# extra patterns (names, addresses) listed one per line in the untracked file
+# .git/personal-patterns, so they never enter the repo themselves.
+# Install: cp tools/pre-commit .git/hooks/pre-commit
+pattern='([A-Za-z]:[\\/]+Users[\\/]|/c/U[s]ers/|/home/[a-z]|Steam[L]ibrary|7656119[0-9]{10}|@(gmail|hotmail|outlook|yahoo)\.)'
+extra="$(git rev-parse --git-dir)/personal-patterns"
+if [ -f "$extra" ]; then
+    while IFS= read -r p; do
+        [ -n "$p" ] && pattern="$pattern|$p"
+    done < "$extra"
+fi
+
+email=$(git config user.email)
+case "$email" in
+    *@users.noreply.github.com) ;;
+    *) echo "pre-commit: author email is not a GitHub noreply address"; exit 1 ;;
+esac
+
+hits=$(git diff --cached -U0 --no-color | grep -E '^\+' | grep -v '^+++' | grep -n -i -E "$pattern")
+if [ -n "$hits" ]; then
+    echo "pre-commit: personal information in the staged changes:"
+    echo "$hits"
+    exit 1
+fi
+names=$(git diff --cached --name-only | grep -i -E "$pattern")
+if [ -n "$names" ]; then
+    echo "pre-commit: personal information in a file name: $names"
+    exit 1
+fi
+exit 0
