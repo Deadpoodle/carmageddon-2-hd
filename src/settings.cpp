@@ -19,7 +19,9 @@ const char* kDefaultIni =
     "; auto = your desktop's resolution, or WIDTHxHEIGHT (e.g. 1920x1080, 2560x1440, 3440x1440)\r\n"
     "Resolution=auto\r\n"
     "; 1 = the view widens to fill the screen (Hor+); 0 = the original 4:3 view, with black bars at the sides\r\n"
-    "Widescreen=1\r\n";
+    "Widescreen=1\r\n"
+    "; How far the HUD spreads on a wide screen: auto (the screen's width, up to 21:9), full, 4:3, 16:9 or 21:9\r\n"
+    "HudWidth=auto\r\n";
 
 std::string IniPath() { return GameDir() + "Carma2HD.ini"; }
 
@@ -47,6 +49,11 @@ void Load() {
         g_display.height = h;
     }
     g_display.widescreen = atoi(IniString("Display", "Widescreen", "1").c_str()) != 0;
+    std::string hud = IniString("Display", "HudWidth", "auto");
+    int a = 0, b = 0;
+    if (hud == "full") g_display.hudAspect = 100.0;  // clamped to the buffer
+    else if (sscanf(hud.c_str(), "%d:%d", &a, &b) == 2 && a > 0 && b > 0) g_display.hudAspect = (double)a / b;
+    else g_display.hudAspect = 0;
     int ow, oh;
     OutputSize(&ow, &oh);
     Log("settings: Resolution=%s (%dx%d), Widescreen=%d", res.c_str(), ow, oh, g_display.widescreen);

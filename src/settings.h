@@ -8,6 +8,7 @@ namespace settings {
 struct Display {
     int width = 0, height = 0;  // Resolution; 0 = auto (the desktop's)
     bool widescreen = true;     // Hor+ view at the resolution's shape; false = original 4:3, pillarboxed
+    double hudAspect = 0;       // HudWidth: the shape the HUD spreads across; 0 = auto (the screen's, up to 21:9)
 };
 
 void Load();
