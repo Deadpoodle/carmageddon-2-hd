@@ -17,6 +17,7 @@
 #include "input.h"
 #include "loader.h"
 #include "movie.h"
+#include "music.h"
 #include "options.h"
 #include "log.h"
 #include "settings.h"
@@ -161,6 +162,7 @@ void Start() {
     controller::Install();
     display::Install();
     movie::Install();
+    music::Install();
     StartTests();
 }
 

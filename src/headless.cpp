@@ -16,6 +16,7 @@
 #include <audiopolicy.h>
 #include <mmdeviceapi.h>
 #include <windows.h>
+#include <mmsystem.h>
 
 #include <cctype>
 #include <cstdio>
@@ -157,6 +158,29 @@ DWORD WINAPI Watchdog(void*) {
     }
 }
 
+// CD music goes to the store's winmm.dll (ogg player) through mciSendCommandA:
+// logged in tests to see that music starts.
+typedef MCIERROR(WINAPI* MciSend_t)(MCIDEVICEID, UINT, DWORD_PTR, DWORD_PTR);
+MciSend_t o_mciSendCommandA;
+MCIERROR WINAPI h_mciSendCommandA(MCIDEVICEID id, UINT msg, DWORD_PTR flags, DWORD_PTR param) {
+    MCIERROR r = o_mciSendCommandA(id, msg, flags, param);
+    if (msg == MCI_PLAY && param && (flags & MCI_FROM)) {
+        DWORD from = ((MCI_PLAY_PARMS*)param)->dwFrom;
+        Log("music: play track %lu (result %lu)", (unsigned long)(from & 0xff), (unsigned long)r);
+    } else if (msg == MCI_OPEN && param) {
+        MCI_OPEN_PARMSA* op = (MCI_OPEN_PARMSA*)param;
+        HMODULE m = nullptr;
+        char path[MAX_PATH] = "?";
+        if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                               (LPCSTR)(void*)o_mciSendCommandA, &m))
+            GetModuleFileNameA(m, path, MAX_PATH);
+        Log("music: open flags %#lx type %s element %s = %lu (handled by %s)", (unsigned long)flags,
+            (flags & MCI_OPEN_TYPE_ID) ? "(id)" : (op->lpstrDeviceType ? op->lpstrDeviceType : "-"),
+            (flags & MCI_OPEN_ELEMENT) && op->lpstrElementName ? op->lpstrElementName : "-", (unsigned long)r, path);
+    }
+    return r;
+}
+
 int WINAPI h_MessageBoxA(HWND, LPCSTR text, LPCSTR caption, UINT) {
     Log("headless: MessageBox \"%s\": %s", caption ? caption : "", text ? text : "");
     return IDOK;
@@ -264,7 +288,9 @@ bool Install(bool visible) {
     loader::Redirect("SetForegroundWindow", (void*)&h_SetForegroundWindow, (void**)&o_SetForegroundWindow);
     loader::Redirect("GetActiveWindow", (void*)&h_GetActiveWindow, (void**)&o_GetActiveWindow);
     loader::OnLoad(&OnLoadLibrary);
-    Log("headless: exe hooks %s", ok ? "ok" : "FAILED");
+    uintptr_t mci = hook::FindImport(nullptr, "winmm.dll", "mciSendCommandA");
+    if (mci) hook::Import(mci, &h_mciSendCommandA, &o_mciSendCommandA);
+    Log("headless: exe hooks %s; music log %s", ok ? "ok" : "FAILED", mci ? "on" : "off");
     if (!o_GetForegroundWindow) o_GetForegroundWindow = &GetForegroundWindow;
     if (ok) {
         CloseHandle(CreateThread(nullptr, 0, &MuteThread, nullptr, 0, nullptr));
