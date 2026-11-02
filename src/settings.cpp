@@ -80,6 +80,10 @@ const Display& GetDisplay() { return g_display; }
 
 std::string Get(const char* section, const char* key, const char* def) { return IniString(section, key, def); }
 
+void Set(const char* section, const char* key, const char* value) {
+    WritePrivateProfileStringA(section, key, value, IniPath().c_str());
+}
+
 void OutputSize(int* w, int* h) {
     if (g_display.width) {
         *w = g_display.width;

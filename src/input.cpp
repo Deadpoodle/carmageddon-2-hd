@@ -295,8 +295,11 @@ constexpr int kNeverPressed = 80, kKeyS = 39, kKeyF9 = 99, kSoundLine = 37;
 const int kUnusedLines[] = {28, 29, 30, 36, 51, 52, 53, 55};
 void* g_loadKeyMapping;
 
+bool g_modern;
+
 void LoadKeyMapping() {
     reinterpret_cast<void (*)()>(g_loadKeyMapping)();
+    if (!g_modern) return;
     for (int line : kUnusedLines) kKeyMapping[line] = kNeverPressed;
     if (kKeyMapping[kSoundLine] == kKeyS) kKeyMapping[kSoundLine] = kKeyF9;
 }
@@ -313,7 +316,9 @@ void LoadBindings() {
     std::string scheme = settings::Get("Controls", "Scheme", "classic");
     for (char& c : scheme) c = (char)tolower((unsigned char)c);
     bool modern = scheme == "modern";
-    g_menuArrows = modern;
+    g_modern = g_menuArrows = modern;
+    g_bindings.clear();  // may be called again when the HD tab changes the scheme
+    memset(g_consumed, 0, sizeof g_consumed);
     int n = 0;
     for (int i = 0; i < (int)(sizeof kActions / sizeof kActions[0]); i++) {
         const Action& a = kActions[i];
@@ -326,7 +331,7 @@ void LoadBindings() {
         n++;
     }
     Log("input: %s scheme, %d actions with their own keys", modern ? "modern" : "classic", n);
-    if (modern) {
+    if (modern && !g_loadKeyMapping) {
         static const uint8_t start[6] = {0x81, 0xec, 0x00, 0x01, 0x00, 0x00};  // sub esp, 0x100
         g_loadKeyMapping = hook::Detour(0x487e10, start, 6, (const void*)&LoadKeyMapping);
         Log("input: unused keymap lines freed, sound toggle on F9: %s", g_loadKeyMapping ? "ok" : "FAILED");

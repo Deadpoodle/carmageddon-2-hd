@@ -16,6 +16,8 @@ const Display& GetDisplay();
 
 // Any key from Carma2HD.ini (def when missing).
 std::string Get(const char* section, const char* key, const char* def);
+// Write one key (the rest of the file, comments included, is kept).
+void Set(const char* section, const char* key, const char* value);
 
 // The size the game is shown at: the configured one, or the desktop's.
 void OutputSize(int* w, int* h);

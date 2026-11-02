@@ -10,6 +10,7 @@
 
 #include "capture.h"
 #include "display.h"
+#include "hdtab.h"
 #include "headless.h"
 #include "hook.h"
 #include "input.h"
@@ -151,6 +152,7 @@ void Start() {
     if (!loader::Install()) Log("loader hooks FAILED");
     settings::Load();
     input::LoadBindings();
+    hdtab::Install();
     display::Install();
     StartTests();
 }
