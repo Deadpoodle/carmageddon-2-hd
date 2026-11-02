@@ -9,7 +9,7 @@ PATH="$(dirname "$CXX"):$PATH"  # the compiler needs its own DLLs
 mkdir -p build
 "$CXX" -std=c++17 -O2 -msse2 -mfpmath=sse -Wall -Wextra -Wno-cast-function-type -shared -static -s -Wl,--no-insert-timestamp \
     -o build/dinput.dll src/main.cpp src/proxy.cpp src/loader.cpp src/headless.cpp src/input.cpp src/capture.cpp \
-    src/settings.cpp src/dgvconf.cpp src/display.cpp src/wide.cpp src/frontend.cpp src/hdtab.cpp src/controller.cpp \
+    src/settings.cpp src/dgvconf.cpp src/display.cpp src/wide.cpp src/frontend.cpp src/hdtab.cpp src/controller.cpp src/options.cpp \
     src/dinput.def \
     -lole32 -ldxguid -luuid -luser32 -lkernel32
 echo "built build/dinput.dll"

@@ -20,6 +20,7 @@
 
 #include "input.h"
 #include "log.h"
+#include "options.h"
 #include "settings.h"
 
 namespace hdtab {
@@ -51,6 +52,9 @@ int32_t& Field(int off) { return *(int32_t*)(kScreen + off); }
 
 // Items: 53 HD tab, 54 GRAPHICS tab, then each row: label + words.
 constexpr int kHdTab = 53, kGfxTab = 54, kFirstRow = 55;
+// The HD tab panel, beside the GRAPHICS tab (640x480 menu space).
+constexpr int kTabLeft = 252, kTabRight = 322, kTabTop = 51, kTabBottom = 84;  // screen, 640x480
+
 constexpr int kStockYonRow = 7, kStockYonFirst = 8, kStockYonLast = 11;  // Scenery Cut-off: label, words
 
 struct Row {
@@ -117,6 +121,8 @@ void Append() {
     Field(kCount) = i;
     Field(kRadioCount) = kFirstGroup + kRowCount - 1;
     kAutoSize(kScreen);
+    Item& hd = At(kHdTab);  // centred in its tab, level with GRAPHICS
+    hd.x = hd.origX = kTabLeft + (kTabRight - kTabLeft - hd.w) / 2;
     Log("hdtab: %d items appended (count %d)", i - kStockItems, i);
 }
 
@@ -147,7 +153,7 @@ int Current(int r) {
     case kControls: return Index(settings::Get("Controls", "Scheme", "classic"), {"classic", "modern"});
     case kPedestrians: return 0;
     case kDrawDistance:
-        return Index(settings::Get("Display", "DrawDistance", "original"), {"original", "far", "further", "max"});
+        return Index(settings::Get("Display", "DrawDistance", "max"), {"original", "far", "further", "max"});
     }
     return -1;
 }
@@ -198,7 +204,40 @@ int __fastcall TabClick(void*) {
     return 4;  // stay on the screen
 }
 
+// ---------------------------------------------------------------------------
+// The HD tab's panel: spare menu model C-5 (used by no screen) scaled into a
+// tab beside the GRAPHICS tab of panel A-8, so it has the panel's own tinted
+// material and fades in with it (re/menus.md §5). Menu models are in a space
+// where screen x = 300 + 1.25x and screen y = 250 - 1.25y.
+
+uintptr_t* const kModelsC = (uintptr_t*)0x687058;  // C models, stride 0x10 (br_model* first)
+constexpr int kTabModel = 5, kScreenModelC = 0x12c;
+
+void ShapeTabModel() {
+    uint8_t* model = (uint8_t*)kModelsC[kTabModel * 4];
+    if (!model) return;
+    float* v = *(float**)(model + 8);
+    int n = *(uint16_t*)(model + 0x10);
+    if (!v || n <= 0) return;
+    float x0 = 1e9f, x1 = -1e9f, y0 = 1e9f, y1 = -1e9f;
+    for (int i = 0; i < n; i++) {
+        float x = v[i * 10], y = v[i * 10 + 1];
+        x0 = x < x0 ? x : x0, x1 = x > x1 ? x : x1, y0 = y < y0 ? y : y0, y1 = y > y1 ? y : y1;
+    }
+    float tx0 = (kTabLeft - 300) / 1.25f, tx1 = (kTabRight - 300) / 1.25f;
+    float ty0 = (250 - kTabBottom) / 1.25f, ty1 = (250 - kTabTop) / 1.25f;
+    if (x1 - x0 < 1 || y1 - y0 < 1) return;
+    if (x0 == tx0 && x1 == tx1) return;  // already shaped (the table persists until the front end reloads it)
+    for (int i = 0; i < n; i++) {
+        v[i * 10] = tx0 + (v[i * 10] - x0) * (tx1 - tx0) / (x1 - x0);
+        v[i * 10 + 1] = ty0 + (v[i * 10 + 1] - y0) * (ty1 - ty0) / (y1 - y0);
+    }
+    reinterpret_cast<void(__cdecl*)(void*, int)>(0x51f950)(model, 1);  // BrModelUpdate
+    Log("hdtab: tab panel shaped from model C-5 (%d vertices)", n);
+}
+
 int __fastcall Enter(void* s) {
+    ShapeTabModel();
     int r = kGraphicsEnter(s);
     if (Field(kCount) == kStockItems) Append();
     ShowPage(false);
@@ -230,15 +269,26 @@ int __fastcall Exit(void* s) {
     return r;
 }
 
+// At start-up, right after OPTIONS.TXT: our draw distance, unless Original.
+// The cameras don't exist yet, so gYon (which they are created from) is set.
+void ApplyDrawDistance() {
+    int dd = Current(kDrawDistance);
+    if (dd <= 0) return;
+    *(float*)0x761f4c = kYon[dd];  // gYon
+    Log("hdtab: draw distance %s (Yon %.0f)", kRows[kDrawDistance].words[dd], kYon[dd]);
+}
+
 }  // namespace
 
 void Install() {
+    options::OnLoaded(&ApplyDrawDistance);
     uint32_t* enter = (uint32_t*)(kScreen + kEnter);
     uint32_t* exit = (uint32_t*)(kScreen + kExit);
     if (*enter != 0x4747e0 || *exit != 0x474850) {
         Log("hdtab: Graphics screen pointers not as expected; no HD tab");
         return;
     }
+    if (*(int32_t*)(kScreen + kScreenModelC) == 0) *(int32_t*)(kScreen + kScreenModelC) = kTabModel;
     *enter = (uint32_t)(uintptr_t)&Enter;
     *exit = (uint32_t)(uintptr_t)&Exit;
     Log("hdtab: installed");

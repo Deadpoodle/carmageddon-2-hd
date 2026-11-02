@@ -16,6 +16,7 @@
 #include "hook.h"
 #include "input.h"
 #include "loader.h"
+#include "options.h"
 #include "log.h"
 #include "settings.h"
 
@@ -153,6 +154,7 @@ void Start() {
     if (!loader::Install()) Log("loader hooks FAILED");
     settings::Load();
     input::LoadBindings();
+    options::Install();
     hdtab::Install();
     controller::Install();
     display::Install();

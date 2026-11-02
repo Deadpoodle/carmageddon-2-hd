@@ -23,6 +23,7 @@
 #include "game.h"
 #include "hook.h"
 #include "loader.h"
+#include "options.h"
 #include "log.h"
 
 namespace wide {
@@ -225,8 +226,7 @@ int32_t* const kHeadupMapW = (int32_t*)0x74aba8;
 int g_mapShift;
 void* g_saveOptions;
 
-void LoadOptions() {
-    reinterpret_cast<void (*)()>(0x48d8f0)();
+void AnchorMinimap() {
     // InitMiniMap snaps x to a multiple of 4, so the shift is one too, or
     // every save would move the map a few pixels.
     g_mapShift = (*kHeadupMapX + *kHeadupMapW / 2 > 320 ? g_right : g_left) & ~3;
@@ -297,8 +297,8 @@ bool Install(int w, int hud) {
     PatchLayout();
     frontend::Install(w);
     bool ok = hook::Redirect(0x489d5e, 0xe8, 0x48ba60, (const void*)&LoadHeadupSlots) &&
-              hook::Redirect(0x489d6b, 0xe8, 0x48ba60, (const void*)&LoadHeadupSlots) &&
-              hook::Redirect(0x47de15, 0xe8, 0x48d8f0, (const void*)&LoadOptions);
+              hook::Redirect(0x489d6b, 0xe8, 0x48ba60, (const void*)&LoadHeadupSlots);
+    options::OnLoaded(&AnchorMinimap);
     static const uint8_t saveStart[6] = {0x81, 0xec, 0x00, 0x01, 0x00, 0x00};  // sub esp, 0x100
     g_saveOptions = hook::Detour(0x48d190, saveStart, 6, (const void*)&SaveOptions);
     if (!ok || !g_saveOptions) g_failures++;

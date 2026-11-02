@@ -22,6 +22,8 @@ const char* kDefaultIni =
     "Widescreen=1\r\n"
     "; How far the HUD spreads on a wide screen: auto (the screen's width, up to 21:9), full, 4:3, 16:9 or 21:9\r\n"
     "HudWidth=auto\r\n"
+    "; How far the scenery is drawn: original (the Graphics menu's own setting), far, further or max\r\n"
+    "DrawDistance=max\r\n"
     "\r\n"
     "[Controls]\r\n"
     "; classic = the game's own keys (its default set drives on the numeric keypad)\r\n"
