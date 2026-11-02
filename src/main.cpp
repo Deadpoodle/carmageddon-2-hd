@@ -9,6 +9,7 @@
 #include <string>
 
 #include "capture.h"
+#include "controller.h"
 #include "display.h"
 #include "hdtab.h"
 #include "headless.h"
@@ -153,6 +154,7 @@ void Start() {
     settings::Load();
     input::LoadBindings();
     hdtab::Install();
+    controller::Install();
     display::Install();
     StartTests();
 }

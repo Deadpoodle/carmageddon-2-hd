@@ -29,6 +29,7 @@
 #include <string>
 #include <vector>
 
+#include "controller.h"
 #include "frontend.h"
 #include "headless.h"
 #include "hook.h"
@@ -39,16 +40,18 @@ namespace input {
 namespace {
 
 // IDirectInputA / IDirectInputDeviceA vtable slots
-enum { kCreateDevice = 3 };
+enum { kCreateDevice = 3, kEnumDevices = 4 };
 enum { kAcquire = 7, kGetDeviceState = 9, kGetDeviceData = 10, kSetCooperativeLevel = 13 };
 
 typedef HRESULT(WINAPI* CreateDevice_t)(void*, REFGUID, void**, IUnknown*);
+typedef HRESULT(WINAPI* EnumDevices_t)(void*, DWORD, LPDIENUMDEVICESCALLBACKA, void*, DWORD);
 typedef HRESULT(WINAPI* GetDeviceState_t)(void*, DWORD, void*);
 typedef HRESULT(WINAPI* GetDeviceData_t)(void*, DWORD, DIDEVICEOBJECTDATA*, DWORD*, DWORD);
 typedef HRESULT(WINAPI* SetCooperativeLevel_t)(void*, HWND, DWORD);
 typedef HRESULT(WINAPI* Acquire_t)(void*);
 
 CreateDevice_t o_CreateDevice;
+EnumDevices_t o_EnumDevices;
 GetDeviceState_t o_GetDeviceState;
 GetDeviceData_t o_GetDeviceData;
 SetCooperativeLevel_t o_SetCooperativeLevel;
@@ -215,7 +218,10 @@ HRESULT WINAPI h_GetDeviceState(void* dev, DWORD size, void* data) {
         for (int i = 0; i < 256; i++) ((BYTE*)data)[i] = g_script[i];
         hr = DI_OK;
     }
-    if (SUCCEEDED(hr)) Translate((BYTE*)data);
+    if (SUCCEEDED(hr)) {
+        Translate((BYTE*)data);
+        controller::InjectKeys((BYTE*)data, &TargetScan);
+    }
     return hr;
 }
 
@@ -227,7 +233,16 @@ HRESULT WINAPI h_GetDeviceData(void* dev, DWORD size, DIDEVICEOBJECTDATA* data, 
     return o_GetDeviceData(dev, size, data, count, flags);
 }
 
+HRESULT WINAPI h_EnumDevices(void* di, DWORD type, LPDIENUMDEVICESCALLBACKA cb, void* ref, DWORD flags) {
+    if (controller::OnEnumDevices(type, cb, ref)) return DI_OK;
+    return o_EnumDevices(di, type, cb, ref, flags);
+}
+
 HRESULT WINAPI h_CreateDevice(void* di, REFGUID guid, void** out, IUnknown* outer) {
+    if (void* pad = controller::CreateDevice(guid)) {
+        *out = pad;
+        return DI_OK;
+    }
     HRESULT hr = o_CreateDevice(di, guid, out, outer);
     bool keyboard = IsEqualGUID(guid, GUID_SysKeyboard);
     Log("dinput: CreateDevice(%s) = %#lx, device %p", keyboard ? "keyboard" : IsEqualGUID(guid, GUID_SysMouse) ? "mouse" : "other",
@@ -309,6 +324,7 @@ void LoadKeyMapping() {
 void OnDirectInput(void* di) {
     if (!di || o_CreateDevice) return;
     hook::Import(Slot(di, kCreateDevice), (CreateDevice_t)&h_CreateDevice, &o_CreateDevice);
+    hook::Import(Slot(di, kEnumDevices), (EnumDevices_t)&h_EnumDevices, &o_EnumDevices);
     Log("dinput: IDirectInputA %p hooked", di);
 }
 
