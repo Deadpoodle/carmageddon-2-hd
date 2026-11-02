@@ -1,0 +1,27 @@
+# Game files: never in the repo
+testrun/
+testrun-*/
+testgame/
+
+# Ghidra project and its exported caches (regenerated)
+re/ghidra/
+re/ghidra-export/
+re/*.asm
+
+# Project log (kept local, per preferences)
+WIKI_LOG.md
+
+# Build and release output
+build/
+release/*.zip
+*.obj
+*.dll
+*.exe
+*.log
+
+# Game-derived art and dumps (generated on the player's machine, never committed)
+dump/
+art/
+
+# The player's own official patches, unpacked (game files)
+patches/
