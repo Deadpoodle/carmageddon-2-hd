@@ -161,8 +161,15 @@ void MapMouse(int* x, int* y) {
     *y = fy;
 }
 
+volatile LONG g_virtualX = -1, g_virtualY = -1;  // test runs: a scripted cursor in menu space
+
 void __fastcall GetMouse(int* x, int* y) {
     o_GetMouse(x, y);
+    if (g_virtualX >= 0) {  // never the real mouse in a test
+        *x = g_virtualX;
+        *y = g_virtualY;
+        return;
+    }
     MapMouse(x, y);
 }
 
@@ -184,6 +191,11 @@ void Check(bool ok, const char* what) {
 }  // namespace
 
 bool InMenu() { return g_scope > 0; }
+
+void SetVirtualCursor(int x, int y) {
+    g_virtualX = x;
+    g_virtualY = y;
+}
 bool InKeyCapture() { return g_capture > 0; }
 
 void Install(int w) {

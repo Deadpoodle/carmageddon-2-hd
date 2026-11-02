@@ -23,6 +23,7 @@
 #include <windows.h>
 
 #include <cctype>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -246,8 +247,10 @@ HRESULT WINAPI h_CreateDevice(void* di, REFGUID guid, void** out, IUnknown* oute
 
 struct Step {
     DWORD ms;
-    const KeyName* key;
+    const KeyName* key;  // nullptr: a mouse step
     DWORD hold;
+    int x, y;  // MOUSE=x;y moves the virtual cursor; CLICK presses the left button
+    bool click;
 };
 std::vector<Step> g_steps;
 
@@ -257,6 +260,18 @@ DWORD WINAPI ScriptThread(void*) {
         DWORD now = GetTickCount() - start;
         if (s.ms > now) Sleep(s.ms - now);
         HWND hwnd = headless::Window();
+        if (!s.key) {
+            if (s.click) {
+                Log("script: click");
+                if (hwnd) PostMessageA(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, 0);
+                Sleep(s.hold);
+                if (hwnd) PostMessageA(hwnd, WM_LBUTTONUP, 0, 0);
+            } else {
+                Log("script: mouse %d,%d", s.x, s.y);
+                frontend::SetVirtualCursor(s.x, s.y);
+            }
+            continue;
+        }
         LPARAM scan = (LPARAM)s.key->dik << 16;
         Log("script: %s (%lu ms)", s.key->name, s.hold);
         g_script[s.key->dik] = 0x80;
@@ -336,7 +351,10 @@ void StartScript(const char* script) {
                 hold = (DWORD)atoi(name.c_str() + slash + 1);
                 name = name.substr(0, slash);
             }
-            if (const KeyName* k = FindKey(name)) g_steps.push_back({ms, k, hold});
+            int mx, my;
+            if (sscanf(name.c_str(), "MOUSE=%d;%d", &mx, &my) == 2) g_steps.push_back({ms, nullptr, 0, mx, my, false});
+            else if (name == "CLICK") g_steps.push_back({ms, nullptr, hold, 0, 0, true});
+            else if (const KeyName* k = FindKey(name)) g_steps.push_back({ms, k, hold, 0, 0, false});
             else Log("script: unknown key %s", name.c_str());
         }
         pos = end + 1;

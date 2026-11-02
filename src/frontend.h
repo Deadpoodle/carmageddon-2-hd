@@ -13,4 +13,7 @@ bool InMenu();
 // The Controls screen is waiting for a key to bind.
 bool InKeyCapture();
 
+// Test runs: the game's mouse position, in 640x480 menu space, from a script.
+void SetVirtualCursor(int x, int y);
+
 }  // namespace frontend
