@@ -70,11 +70,37 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     return CallWindowProcA(o_WndProc, hwnd, msg, wp, lp);
 }
 
+// The game exits at start-up if a window of its class exists (FindWindowA at
+// 0x51ad11), so a test window under the stock class would make the player's
+// own launch quit. Tests register and use a class of their own.
+const char* kTestClass = "Carma2MainWndClass_C2HDTest";
+decltype(&RegisterClassA) o_RegisterClassA;
+decltype(&SendMessageA) o_SendMessageA;
+
+const char* TestClass(LPCSTR cls) { return HIWORD(cls) && strcmp(cls, kWindowClass) == 0 ? kTestClass : cls; }
+
+ATOM WINAPI h_RegisterClassA(const WNDCLASSA* wc) {
+    WNDCLASSA copy = *wc;
+    copy.lpszClassName = TestClass(wc->lpszClassName);
+    return o_RegisterClassA(&copy);
+}
+
+// Shutdown broadcasts WM_SHOWWINDOW to every top-level window (0x51c1e4).
+LRESULT WINAPI h_SendMessageA(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    if (hwnd == HWND_BROADCAST) {
+        Log("headless: dropped a broadcast of message %#x", msg);
+        return 0;
+    }
+    return o_SendMessageA(hwnd, msg, wp, lp);
+}
+
 HWND WINAPI h_CreateWindowExA(DWORD ex, LPCSTR cls, LPCSTR name, DWORD style, int, int, int w, int h, HWND parent,
                               HMENU menu, HINSTANCE inst, LPVOID param) {
+    bool game = !parent && HIWORD(cls) && strcmp(cls, kWindowClass) == 0;
+    cls = TestClass(cls);
     HWND hwnd = o_CreateWindowExA(ex | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW, cls, name, style & ~WS_VISIBLE, kOff, kOff,
                                   w, h, parent, menu, inst, param);
-    if (hwnd && !parent && HIWORD(cls) && strcmp(cls, kWindowClass) == 0) {
+    if (hwnd && game) {
         g_hwnd = hwnd;
         o_WndProc = (WNDPROC)SetWindowLongPtrA(hwnd, GWLP_WNDPROC, (LONG_PTR)&WndProc);
     }
@@ -212,7 +238,9 @@ bool Install() {
               HookUser32(nullptr, "GetForegroundWindow", &h_GetForegroundWindow, &o_GetForegroundWindow) &&
               HookUser32(nullptr, "SetFocus", &h_SetFocus, &o_SetFocus) &&
               HookUser32(nullptr, "FindWindowA", &h_FindWindowA, &o_FindWindowA) &&
-              HookUser32(nullptr, "MessageBoxA", &h_MessageBoxA, &o_MessageBoxA);
+              HookUser32(nullptr, "MessageBoxA", &h_MessageBoxA, &o_MessageBoxA) &&
+              HookUser32(nullptr, "RegisterClassA", &h_RegisterClassA, &o_RegisterClassA) &&
+              HookUser32(nullptr, "SendMessageA", &h_SendMessageA, &o_SendMessageA);
     // The renderer drivers' own window calls (they import these by name).
     loader::Redirect("SetWindowPos", (void*)&h_SetWindowPos, (void**)&o_SetWindowPos);
     loader::Redirect("MoveWindow", (void*)&h_MoveWindow, (void**)&o_MoveWindow);
