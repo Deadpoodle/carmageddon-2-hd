@@ -28,3 +28,5 @@ patches/
 
 # Third-party downloads (licence decides what is shipped; the packaging script copies them)
 third_party/
+re/ghidra-export-*/
+re/names-*.tsv

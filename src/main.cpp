@@ -76,7 +76,45 @@ DWORD WINAPI QuitThread(void* p) {
     return 0;
 }
 
+// Logs the first access violation (address and registers), then lets the
+// normal handling continue: a crash always leaves a line in the log.
+LONG CALLBACK CrashLogger(EXCEPTION_POINTERS* ep) {
+    static LONG once;
+    DWORD code = ep->ExceptionRecord->ExceptionCode;
+    if (code != EXCEPTION_ACCESS_VIOLATION || InterlockedExchange(&once, 1)) return EXCEPTION_CONTINUE_SEARCH;
+    CONTEXT* c = ep->ContextRecord;
+    Log("CRASH: access violation at %p (%s address %p) eax=%08lx ebx=%08lx ecx=%08lx edx=%08lx esi=%08lx edi=%08lx "
+        "ebp=%08lx esp=%08lx",
+        ep->ExceptionRecord->ExceptionAddress, ep->ExceptionRecord->ExceptionInformation[0] ? "writing" : "reading",
+        (void*)ep->ExceptionRecord->ExceptionInformation[1], c->Eax, c->Ebx, c->Ecx, c->Edx, c->Esi, c->Edi, c->Ebp,
+        c->Esp);
+    // Code addresses on the stack, named by module and offset (the drivers are
+    // loaded by BRender's own loader, so theirs show as "?" with the address).
+    const DWORD* sp = (const DWORD*)c->Esp;
+    int shown = 0;
+    for (int i = 0; i < 512 && shown < 16; i++) {
+        DWORD v = sp[i];
+        MEMORY_BASIC_INFORMATION mbi;
+        if (v < 0x10000 || !VirtualQuery((void*)v, &mbi, sizeof mbi) || mbi.State != MEM_COMMIT ||
+            !(mbi.Protect & (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY)))
+            continue;
+        HMODULE m = nullptr;
+        char name[MAX_PATH] = "?";
+        if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                               (LPCSTR)v, &m) && m) {
+            GetModuleFileNameA(m, name, MAX_PATH);
+            const char* base = strrchr(name, '\\');
+            Log("CRASH: [esp+%03x] %s+%#lx", i * 4, base ? base + 1 : name, v - (DWORD)(uintptr_t)m);
+        } else {
+            Log("CRASH: [esp+%03x] %08lx (alloc base %p)", i * 4, v, mbi.AllocationBase);
+        }
+        shown++;
+    }
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+
 void StartTests() {
+    AddVectoredExceptionHandler(0, &CrashLogger);
     if (Env("C2HD_TEST_EXIT") == "window") {
         bool ok = hook::Import(hook::FindImport(nullptr, "USER32.dll", "CreateWindowExA"), &ExitAtCreateWindow,
                                &real_CreateWindowExA);

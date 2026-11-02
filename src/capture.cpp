@@ -55,12 +55,13 @@ void Save(LPDIRECTDRAWSURFACE surf) {
         return;
     }
     int w = d.dwWidth, h = d.dwHeight, bpp = d.ddpfPixelFormat.dwRGBBitCount;
-    std::vector<BYTE> rgb((size_t)w * h * 3);
+    size_t stride = ((size_t)w * 3 + 3) & ~(size_t)3;  // BMP rows are padded to 4 bytes
+    std::vector<BYTE> rgb(stride * h);
     for (int y = 0; y < h; y++) {
         const BYTE* row = (const BYTE*)d.lpSurface + (size_t)y * d.lPitch;
         for (int x = 0; x < w; x++) {
             DWORD v = bpp == 16 ? ((const WORD*)row)[x] : ((const DWORD*)row)[x];
-            BYTE* o = &rgb[((size_t)(h - 1 - y) * w + x) * 3];  // bottom-up BGR
+            BYTE* o = &rgb[(size_t)(h - 1 - y) * stride + (size_t)x * 3];  // bottom-up BGR
             o[0] = (BYTE)Channel(v, d.ddpfPixelFormat.dwBBitMask);
             o[1] = (BYTE)Channel(v, d.ddpfPixelFormat.dwGBitMask);
             o[2] = (BYTE)Channel(v, d.ddpfPixelFormat.dwRBitMask);
@@ -82,10 +83,6 @@ void Save(LPDIRECTDRAWSURFACE surf) {
     fh.bfType = 0x4d42;
     fh.bfOffBits = sizeof fh + sizeof ih;
     fh.bfSize = fh.bfOffBits + (DWORD)rgb.size();
-    if (w * 3 % 4) {
-        Log("capture: width %d not 4-aligned, skipped", w);
-        return;
-    }
     FILE* f = fopen(path, "wb");
     if (!f) return;
     fwrite(&fh, sizeof fh, 1, f);
@@ -142,15 +139,35 @@ HRESULT WINAPI h_CreateSurface2(void* dd, DDSURFACEDESC* desc, LPDIRECTDRAWSURFA
     return CreateSurfaceCommon(o_CreateSurface2, dd, desc, out, outer);
 }
 
+// IDirectDraw::SetDisplayMode (slot 21) and IDirectDraw2's (slot 21, with
+// refresh rate and flags): logged, to see what the driver asks for.
+typedef HRESULT(WINAPI* SetDisplayMode_t)(void*, DWORD, DWORD, DWORD);
+typedef HRESULT(WINAPI* SetDisplayMode2_t)(void*, DWORD, DWORD, DWORD, DWORD, DWORD);
+SetDisplayMode_t o_SetDisplayMode;
+SetDisplayMode2_t o_SetDisplayMode2;
+HRESULT WINAPI h_SetDisplayMode(void* dd, DWORD w, DWORD h, DWORD bpp) {
+    HRESULT hr = o_SetDisplayMode(dd, w, h, bpp);
+    Log("ddraw: SetDisplayMode(%lu x %lu x %lu) = %#lx", w, h, bpp, (unsigned long)hr);
+    return hr;
+}
+HRESULT WINAPI h_SetDisplayMode2(void* dd, DWORD w, DWORD h, DWORD bpp, DWORD rate, DWORD flags) {
+    HRESULT hr = o_SetDisplayMode2(dd, w, h, bpp, rate, flags);
+    Log("ddraw: SetDisplayMode2(%lu x %lu x %lu, %lu Hz) = %#lx", w, h, bpp, rate, (unsigned long)hr);
+    return hr;
+}
+
 HRESULT WINAPI h_DirectDrawCreate(GUID* guid, LPDIRECTDRAW* out, IUnknown* outer) {
     HRESULT hr = o_DirectDrawCreate(guid, out, outer);
     Log("capture: DirectDrawCreate = %#lx", (unsigned long)hr);
     if (SUCCEEDED(hr) && out && *out && !o_CreateSurface) {
         hook::Import(Slot(*out, kCreateSurface), (CreateSurface_t)&h_CreateSurface, &o_CreateSurface);
+        hook::Import(Slot(*out, 21), (SetDisplayMode_t)&h_SetDisplayMode, &o_SetDisplayMode);
         IDirectDraw2* dd2 = nullptr;
         if (SUCCEEDED((*out)->QueryInterface(IID_IDirectDraw2, (void**)&dd2))) {
-            if (*(void***)dd2 != *(void***)*out)
+            if (*(void***)dd2 != *(void***)*out) {
                 hook::Import(Slot(dd2, kCreateSurface), (CreateSurface_t)&h_CreateSurface2, &o_CreateSurface2);
+                hook::Import(Slot(dd2, 21), (SetDisplayMode2_t)&h_SetDisplayMode2, &o_SetDisplayMode2);
+            }
             dd2->Release();
         }
     }

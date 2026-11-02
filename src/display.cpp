@@ -15,6 +15,7 @@
 
 #include <windows.h>
 
+#include <cstdlib>
 #include <string>
 
 #include "dgvconf.h"
@@ -69,6 +70,24 @@ void Install() {
         res = std::to_string(w43) + "x" + std::to_string(h);
     }
     dgvconf::Sync({{"DirectX", "Resolution", res}, {"General", "ScalingMode", "stretched_ar"}});
+
+    // Experiment (test switch only): a wider device buffer at 480 lines.
+    char wide[16] = "";
+    GetEnvironmentVariableA("C2HD_WIDE", wide, sizeof wide);
+    if (int ww = atoi(wide)) {
+        bool ok = hook::PatchU32(game::DeviceWidthImm, 640, (uint32_t)ww);
+        char tall[16] = "";
+        GetEnvironmentVariableA("C2HD_TALL", tall, sizeof tall);
+        if (int hh = atoi(tall)) ok &= hook::PatchU32(game::DeviceHeightImm, 480, (uint32_t)hh);
+        char spec[16] = "";
+        GetEnvironmentVariableA("C2HD_WIDE_SPEC", spec, sizeof spec);
+        if (spec[0] == '1') {  // physical width and row length in gGraf_specs[1]
+            ok &= hook::PatchU32(game::GrafSpec640 + 0x24, 640, (uint32_t)ww);
+            ok &= hook::PatchU32(game::GrafSpec640 + 0x28, 640, (uint32_t)ww);
+        }
+        Log("display: EXPERIMENT device width %d (%s)", ww, ok ? "patched" : "FAILED");
+        dgvconf::Sync({{"DirectXExt", "ExtraEnumeratedResolutions", std::to_string(ww) + "x480"}});
+    }
 
     if (s.widescreen && !hook::Redirect(game::CallInitialiseCameras, 0xe8, game::InitialiseCameras,
                                         (const void*)&InitialiseCameras))

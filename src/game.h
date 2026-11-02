@@ -10,6 +10,11 @@ constexpr uintptr_t RendererDeviceName = 0x6621dc;  // const char*: "3DFX_WIN" (
 constexpr uintptr_t NameGlide = 0x6622b8;
 constexpr uintptr_t NameD3D = 0x662518;
 
+// Screen size (re/display.md, re/camera-hud.md plan B)
+constexpr uintptr_t DeviceWidthImm = 0x51c34f;   // push 0x280 (WIDTH_I32) in PDAllocateScreenAndBack 0x51c300
+constexpr uintptr_t DeviceHeightImm = 0x51c348;  // push 0x1e0 (HEIGHT_I32)
+constexpr uintptr_t GrafSpec640 = 0x66223c;      // gGraf_specs[1]: +0xc total w, +0x10 total h, +0x24 row, +0x28 phys w, +0x2c phys h
+
 // Cameras (re/camera-hud.md)
 constexpr uintptr_t InitialiseCameras = 0x47e3b0;      // void(void): creates gCamera_list[2], rear-view camera
 constexpr uintptr_t CallInitialiseCameras = 0x47df0e;  // its only call, in InitialiseDeathRace 0x47dd20
