@@ -4,6 +4,8 @@ An unofficial patch for **Carmageddon II: Carpocalypse Now** (the Steam release)
 
 It is a binary patch: a small `dinput.dll` that the game loads at start-up and that changes the game in memory. No game file is modified, and no game data is included here: you need your own copy of the game.
 
+**[Download the latest release](https://github.com/Deadpoodle/carmageddon-2-hd/releases/latest)** (`carma2hd.zip`), then see [Installing](#installing), or [Steam Deck and Linux](#steam-deck-and-linux) for a one-line install there.
+
 ## Contents
 
 - [Features](#features)
@@ -38,7 +40,6 @@ Versions and what changed in each: [CHANGELOG.md](CHANGELOG.md). The main menu s
 **Controls**
 - A modern keyboard scheme (W/A/S/D or the arrows), and any action can be put on any key.
 - Xbox-style controllers through XInput, in races and in menus.
-- Pedestrians animate smoothly at high frame rates (the original game's physics undid their animation between its 40 ms ticks, which made them twitch above about 30 fps).
 - Every menu works with the arrows, W/S, a controller or the mouse, so the game can be played with a pad alone (a Steam Deck, say). The original left several screens to the mouse:
   - **Change Car:** Left/Right change the car, Up/Down pick OK or CANCEL, Esc (B) cancels.
   - **Load Game:** Up/Down move along the saved games (the list scrolls), Esc (B) cancels.
@@ -52,21 +53,29 @@ Versions and what changed in each: [CHANGELOG.md](CHANGELOG.md). The main menu s
 - The host's lobby shows the address to give friends, and opens the game's port on the router (UPnP) while hosting.
 - Several copies on one PC, for testing.
 
+**Steam Deck and Linux**
+- Runs under Proton, with an install script that sets it all up (see [Steam Deck and Linux](#steam-deck-and-linux)). The Deck's 1280x800 screen gets the same wider view and HUD.
+
 **Fixes**
+- Pedestrians animate smoothly at high frame rates. The original game's physics undid their animation between its 40 ms ticks, which made them twitch above about 30 fps.
+- No crash on the way back to the menus after a long race (the original stopped a "no slot" power-up effect without checking for it).
 - Alt+F4, and Close from the taskbar, quit the game. In the original, Alt+F4 left the game hanging, and Close left it running without a window.
 - Alt+Tab works. Windows' own compatibility fix for this game blocks it with a keyboard hook, which the patch declines. The game pauses while you're away.
 - Moving up or down the pause menu in a race no longer ends the race. In the original, landing on **Abort Race** with the keys (or wrapping round to it from QUIT GAME) aborted the race without a press of Return.
 - The time bonus at the end of a race can't go negative. In the original, if the game clock stepped back while the bonus counted up, a 32-bit overflow gave a bonus of minus millions and the race timer started climbing.
 
+**Extras**
+- A debug overlay (F2 in a race): frame rate, positions and more, for bug reports.
+
 All of this is on a new **HD** tab of the in-game Graphics screen (Options → Settings), or in `Carma2HD.ini`.
 
 ## Installing
 
-The release zip, `carma2hd.zip`, holds `dinput.dll`, `dgVoodoo.conf`, the Steam Deck installer and these docs (`tools/package.sh` builds it). On Windows:
+The release zip, [`carma2hd.zip`](https://github.com/Deadpoodle/carmageddon-2-hd/releases/latest), holds `dinput.dll`, `dgVoodoo.conf`, the Steam Deck installer and these docs. On Windows:
 
-1. Take `dinput.dll` from the zip, or build it (see [Building](#building)).
+1. Download `carma2hd.zip` from the [latest release](https://github.com/Deadpoodle/carmageddon-2-hd/releases/latest) and extract it (or build `dinput.dll` yourself, see [Building](#building)).
 2. Download [dgVoodoo2](https://github.com/dege-diosg/dgVoodoo2/releases) (tested with 2.87.5). From its `MS\x86` folder, take `DDraw.dll` and `D3DImm.dll`.
-3. Put `dinput.dll`, `DDraw.dll`, `D3DImm.dll` and this repo's [`dist/dgVoodoo.conf`](dist/dgVoodoo.conf) in the game's folder, next to `CARMA2_HW.EXE`.
+3. Put `dinput.dll` and `dgVoodoo.conf` from the zip, and dgVoodoo2's `DDraw.dll` and `D3DImm.dll`, in the game's folder, next to `CARMA2_HW.EXE`.
    - To keep the store's copy untouched, copy the whole game folder somewhere else first and install there.
 4. Start the game as usual: the store's Play button works. The first start writes `Carma2HD.ini` next to the game, with every setting explained.
 
@@ -80,22 +89,27 @@ The patch runs under Proton, Steam's Windows layer, on a Steam Deck or any Linux
 WINEDLLOVERRIDES="dinput,ddraw,d3dimm=n,b" %command%
 ```
 
-**Installing with the script** (in Desktop Mode):
+**Installing with the script** (in Desktop Mode): open **Konsole** and paste this line:
 
-1. Get `carma2hd.zip` onto the Deck (a USB stick, or a download) and extract it, for example into `Downloads`.
-2. Open **Konsole** and run the installer from where you extracted it:
-   ```bash
-   bash ~/Downloads/carma2hd/install-steamdeck.sh
-   ```
-3. The script:
+```bash
+curl -fsSL https://raw.githubusercontent.com/Deadpoodle/carmageddon-2-hd/main/tools/install-steamdeck.sh | bash
+```
+
+1. The script:
    - finds the game in any Steam library, on internal storage or an SD card;
-   - copies in `dinput.dll` and `dgVoodoo.conf`;
+   - downloads the [latest release](https://github.com/Deadpoodle/carmageddon-2-hd/releases/latest) and copies in its `dinput.dll` and `dgVoodoo.conf`;
    - downloads dgVoodoo2 2.87.5 from its GitHub releases and checks its `DDraw.dll` and `D3DImm.dll` before copying them in;
    - sets the launch option above, keeping any options already there.
-4. Steam rewrites its settings when it exits, so the launch option can only be set while Steam is closed. If Steam is running, the script asks you to exit it (the Steam icon in the taskbar → Exit), then press Enter. Type `s` instead to skip, and paste the line above into **Carmageddon 2 → Properties → General → Launch Options** yourself.
-5. Go back to Gaming Mode and start the game as usual.
+2. Steam rewrites its settings when it exits, so the launch option can only be set while Steam is closed. If Steam is running, the script asks you to exit it (the Steam icon in the taskbar → Exit), then press Enter. Type `s` instead to skip, and paste the line above into **Carmageddon 2 → Properties → General → Launch Options** yourself.
+3. Go back to Gaming Mode and start the game as usual.
 
-Running the script again updates the patch. `bash install-steamdeck.sh --uninstall` removes the patch files and takes our part out of the launch option.
+Running the line again updates the patch to the latest release. To remove the patch, run it with `--uninstall`: it removes the patch files and takes its part out of the launch option.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Deadpoodle/carmageddon-2-hd/main/tools/install-steamdeck.sh | bash -s -- --uninstall
+```
+
+Without internet on the Deck, copy `carma2hd.zip` over, extract it, and run `bash install-steamdeck.sh` from the extracted folder: it then installs that copy instead. dgVoodoo2 still has to be downloaded once.
 
 **On the Deck:**
 - **Screen:** `Resolution=auto` picks the Deck's 1280x800. Its 16:10 shape gets a 768x480 Hor+ view, with the HUD spread across the width. Docked, auto picks the external display's resolution instead.
@@ -264,7 +278,6 @@ Press **Esc** while typing to cancel. Press **Return** on an empty box to clear 
 
 - **Zombie and alien pedestrians**, the German and UK releases' modes. They need the original disc data to look right, so the option is greyed out.
 - **AI opponents in network races.**
-- **A public release.** The repo and its releases are private for now, so the Steam Deck installer can't fetch the patch on its own yet: copy the zip over. Once releases are public, running the script alone downloads the latest one.
 
 ## Building
 

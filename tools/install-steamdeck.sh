@@ -2,13 +2,16 @@
 # Carmageddon II HD: install on a Steam Deck (or any Linux PC running the
 # Steam release through Proton).
 #
-# In Desktop Mode, open Konsole and run:
+# In Desktop Mode, open Konsole and paste:
+#   curl -fsSL https://raw.githubusercontent.com/Deadpoodle/carmageddon-2-hd/main/tools/install-steamdeck.sh | bash
+# (add "-s -- --uninstall" after bash to remove the patch again), or from an
+# extracted release zip:
 #   bash install-steamdeck.sh              install, or update to this version
 #   bash install-steamdeck.sh --uninstall  remove the patch again
 #
 # It finds the game in any Steam library (internal storage or SD card), copies
 # in the patch (dinput.dll and dgVoodoo.conf from this script's folder, or the
-# latest release), downloads dgVoodoo2's DDraw.dll and D3DImm.dll, and sets the
+# latest release when the script is piped in), downloads dgVoodoo2's DDraw.dll and D3DImm.dll, and sets the
 # game's launch option so Proton loads them:
 #   WINEDLLOVERRIDES="dinput,ddraw,d3dimm=n,b" %command%
 # Steam keeps launch options in its own files and rewrites them when it exits,
@@ -18,7 +21,7 @@ set -euo pipefail
 
 APPID=282030
 OVERRIDES='WINEDLLOVERRIDES="dinput,ddraw,d3dimm=n,b"'
-RELEASE_ZIP=https://github.com/Deadpoodle/carmageddon-2-hd/releases/latest/download/carma2hd.zip
+RELEASE_ZIP=${C2HD_RELEASE_ZIP:-https://github.com/Deadpoodle/carmageddon-2-hd/releases/latest/download/carma2hd.zip}
 DGV_ZIP=${C2HD_DGV_ZIP:-https://github.com/dege-diosg/dgVoodoo2/releases/download/v2.87.5/dgVoodoo2_87_5.zip}
 DGV_DDRAW_SHA=612a24408a090a3c6f3886557fa18034ee742e94ad0a40ebdf854d2816176c2e
 DGV_D3DIMM_SHA=93c534f2d17419ea78f15551f7e0aac78b3c503733a840914fa063708a5afe8e
@@ -37,7 +40,9 @@ case "${1:-}" in
 esac
 
 command -v python3 >/dev/null || fail "python3 is needed (SteamOS has it)"
-here="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+# The script's own folder; none when it is piped in (curl ... | bash).
+here=""
+if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; fi
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
@@ -193,7 +198,7 @@ fi
 # --- The patch's own files -------------------------------------------------------
 
 src=""
-if [ -f "$here/dinput.dll" ] && [ -f "$here/dgVoodoo.conf" ]; then
+if [ -n "$here" ] && [ -f "$here/dinput.dll" ] && [ -f "$here/dgVoodoo.conf" ]; then
     src="$here"
     say "Patch: from $here"
 else
