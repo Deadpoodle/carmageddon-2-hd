@@ -86,8 +86,14 @@ std::vector<dgvconf::Key> VisualKeys() {
             {"DirectX", "ForceVerticalSync", vsync ? "true" : "false"}};
 }
 
+// The visuals and the mouse. The mouse is mapped from the window's own pixels
+// (frontend.cpp), so dgVoodoo2 must leave the physical cursor free in the
+// window: by default it keeps it inside the game's resolution (854x480 of a
+// 2560x1440 screen, the top-left third). CaptureMouse (on by default) still
+// keeps it in the window.
 std::vector<dgvconf::Key> With(std::vector<dgvconf::Key> keys) {
     for (auto& k : VisualKeys()) keys.push_back(k);
+    keys.push_back({"GeneralExt", "FreeMouse", "true"});
     return keys;
 }
 

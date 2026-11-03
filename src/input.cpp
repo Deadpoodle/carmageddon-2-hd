@@ -265,12 +265,15 @@ HRESULT WINAPI h_CreateDevice(void* di, REFGUID guid, void** out, IUnknown* oute
 // Test script
 
 struct Step {
-    DWORD ms;
-    const KeyName* key;  // nullptr: a mouse step
-    DWORD hold;
-    int x, y;  // MOUSE=x;y moves the virtual cursor; CLICK presses the left button
-    bool click;
-    std::string text;  // TEXT=chars types them (WM_CHAR, as a keyboard would)
+    DWORD ms = 0;
+    const KeyName* key = nullptr;  // nullptr: not a key step
+    DWORD hold = 0;
+    int x = 0, y = 0;     // MOUSE=x;y moves the cursor; CLICK presses the left button
+    bool click = false;
+    std::string text;     // TEXT=chars types them (WM_CHAR, as a keyboard would)
+    bool client = false;  // PMOUSE=x;y: x,y are client pixels, not menu space
+    bool sweep = false;   // SWEEP hovers every item of the current screen
+    UINT message = 0;     // ALTF4 / CLOSE post that window message
 };
 std::vector<Step> g_steps;
 
@@ -281,7 +284,13 @@ DWORD WINAPI ScriptThread(void*) {
         if (s.ms > now) Sleep(s.ms - now);
         HWND hwnd = headless::Window();
         if (!s.key) {
-            if (!s.text.empty()) {
+            if (s.message) {
+                Log("script: post %s", s.message == WM_CLOSE ? "WM_CLOSE" : "Alt+F4");
+                if (hwnd && s.message == WM_CLOSE) PostMessageA(hwnd, WM_CLOSE, 0, 0);
+                else if (hwnd) PostMessageA(hwnd, WM_SYSKEYDOWN, VK_F4, (0x3e << 16) | (1 << 29) | 1);
+            } else if (s.sweep) {
+                frontend::Sweep();
+            } else if (!s.text.empty()) {
                 Log("script: type \"%s\"", s.text.c_str());
                 for (char c : s.text) {
                     if (hwnd) PostMessageA(hwnd, WM_CHAR, (BYTE)c, 1);
@@ -293,8 +302,9 @@ DWORD WINAPI ScriptThread(void*) {
                 Sleep(s.hold);
                 if (hwnd) PostMessageA(hwnd, WM_LBUTTONUP, 0, 0);
             } else {
-                Log("script: mouse %d,%d", s.x, s.y);
-                frontend::SetVirtualCursor(s.x, s.y);
+                Log("script: mouse %d,%d%s", s.x, s.y, s.client ? " (client)" : "");
+                if (s.client) frontend::SetTestCursor(s.x, s.y);
+                else frontend::SetVirtualCursor(s.x, s.y);
             }
             continue;
         }
@@ -368,6 +378,9 @@ void LoadBindings() {
 void StartScript(const char* script) {
     // "2.5:RETURN,4:W/2000": key at 2.5 s; an optional /ms holds it (default 150).
     // "6:TEXT=10.0.0.5:47700" types the text after the time's colon.
+    // MOUSE=x;y (menu space) and PMOUSE=x;y (client pixels) move the cursor
+    // through the game's mouse path; CLICK clicks; SWEEP hovers every item.
+    // ALTF4 and CLOSE post Alt+F4 and WM_CLOSE to the game's window.
     std::string s = script;
     size_t pos = 0;
     while (pos < s.size()) {
@@ -384,12 +397,22 @@ void StartScript(const char* script) {
                 hold = (DWORD)atoi(name.c_str() + slash + 1);
                 name = name.substr(0, slash);
             }
-            int mx, my;
-            if (name.rfind("TEXT=", 0) == 0) g_steps.push_back({ms, nullptr, 0, 0, 0, false, name.substr(5)});
-            else if (sscanf(name.c_str(), "MOUSE=%d;%d", &mx, &my) == 2) g_steps.push_back({ms, nullptr, 0, mx, my, false, ""});
-            else if (name == "CLICK") g_steps.push_back({ms, nullptr, hold, 0, 0, true, ""});
-            else if (const KeyName* k = FindKey(name)) g_steps.push_back({ms, k, hold, 0, 0, false, ""});
-            else Log("script: unknown key %s", name.c_str());
+            Step st;
+            st.ms = ms;
+            st.hold = hold;
+            if (name.rfind("TEXT=", 0) == 0) st.text = name.substr(5);
+            else if (sscanf(name.c_str(), "MOUSE=%d;%d", &st.x, &st.y) == 2) {}
+            else if (sscanf(name.c_str(), "PMOUSE=%d;%d", &st.x, &st.y) == 2) st.client = true;
+            else if (name == "SWEEP") st.sweep = true;
+            else if (name == "ALTF4") st.message = WM_SYSKEYDOWN;
+            else if (name == "CLOSE") st.message = WM_CLOSE;
+            else if (name == "CLICK") st.click = true;
+            else if (!(st.key = FindKey(name))) {
+                Log("script: unknown key %s", name.c_str());
+                pos = end + 1;
+                continue;
+            }
+            g_steps.push_back(st);
         }
         pos = end + 1;
     }

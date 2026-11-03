@@ -11,6 +11,7 @@
 #include "capture.h"
 #include "controller.h"
 #include "display.h"
+#include "frontend.h"
 #include "hdtab.h"
 #include "headless.h"
 #include "hook.h"
@@ -21,6 +22,7 @@
 #include "netmenu.h"
 #include "netshim.h"
 #include "options.h"
+#include "quit.h"
 #include "log.h"
 #include "settings.h"
 #include "sharptext.h"
@@ -130,12 +132,20 @@ void StartTests() {
         if (!ok) TerminateProcess(GetCurrentProcess(), 1);  // never let a test reach the screen
     }
     std::string mode = Env("C2HD_HEADLESS");
+    if (mode == "3") {
+        if (!headless::InstallScreen()) TerminateProcess(GetCurrentProcess(), 1);
+        int quit = atoi(Env("C2HD_QUIT").c_str());
+        CloseHandle(CreateThread(nullptr, 0, &QuitThread, (void*)(uintptr_t)(quit > 0 ? quit : 120), 0, nullptr));
+        capture::Install();  // the frame-rate log
+        return;
+    }
     if (mode != "1" && mode != "2") return;
     if (!headless::Install(mode == "2")) {
         Log("test: headless hooks failed; ending the run");
         TerminateProcess(GetCurrentProcess(), 1);
     }
     capture::Install();
+    frontend::InstallTestCursor();
     if (int ms = atoi(Env("C2HD_SHOTS").c_str()))
         CloseHandle(CreateThread(nullptr, 0, &ShotThread, (void*)(uintptr_t)ms, 0, nullptr));
     int quit = atoi(Env("C2HD_QUIT").c_str());
@@ -159,6 +169,7 @@ void Start() {
     }
     if (!loader::Install()) Log("loader hooks FAILED");
     settings::Load();
+    quit::Install();
     input::LoadBindings();
     options::Install();
     hdtab::Install();

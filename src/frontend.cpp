@@ -7,16 +7,22 @@
 // nothing: the driver clears the whole mode every frame.
 //
 // The mouse: client pixels are mapped to the W x 480 frame the way dgVoodoo2
-// shows it (stretched_ar), then into menu space inside a scope.
+// shows it (stretched_ar), then into menu space inside a scope. Test runs
+// drive the same path: the exe's GetCursorPos/ScreenToClient answer a
+// scripted point in the client of the emulated full-screen window (the
+// output size), and Sweep() hovers every item of the current screen.
 #include "frontend.h"
 
 #include <windows.h>
 
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 
+#include "headless.h"
 #include "hook.h"
 #include "log.h"
+#include "settings.h"
 
 namespace frontend {
 
@@ -147,30 +153,77 @@ GetMouse_t o_GetMouse;
 GetDoubleClick_t o_GetDoubleClick;
 LONG g_mouseLogged;
 
-void MapMouse(int* x, int* y) {
+// The window's client size. Test windows are hidden and small, so tests use
+// the client a full-screen window would have: the output size.
+bool ClientSize(double* cw, double* ch) {
+    if (headless::Active()) {
+        int w, h;
+        settings::OutputSize(&w, &h);
+        *cw = w;
+        *ch = h;
+        return true;
+    }
     RECT rc;
-    if (!GetClientRect(*kWindow, &rc) || rc.right <= 0 || rc.bottom <= 0) return;
-    double cw = rc.right, ch = rc.bottom;
-    double s = cw / g_w < ch / 480.0 ? cw / g_w : ch / 480.0;
-    double ox = (cw - g_w * s) / 2, oy = (ch - 480 * s) / 2;
+    if (!GetClientRect(*kWindow, &rc) || rc.right <= 0 || rc.bottom <= 0) return false;
+    *cw = rc.right;
+    *ch = rc.bottom;
+    return true;
+}
+
+// The frame (W x 480) as dgVoodoo2's stretched_ar shows it in the client:
+// scale and top-left offset.
+bool Frame(double* s, double* ox, double* oy) {
+    double cw, ch;
+    if (!ClientSize(&cw, &ch)) return false;
+    *s = cw / g_w < ch / 480.0 ? cw / g_w : ch / 480.0;
+    *ox = (cw - g_w * *s) / 2;
+    *oy = (ch - 480 * *s) / 2;
+    return true;
+}
+
+void MapMouse(int* x, int* y) {
+    double s, ox, oy;
+    if (!Frame(&s, &ox, &oy)) return;
     int fx = (int)((*x - ox) / s), fy = (int)((*y - oy) / s);
     if (g_scope > 0) fx -= g_xo;
-    if (!InterlockedExchange(&g_mouseLogged, 1))
-        Log("frontend: client %ldx%ld, mouse %d,%d -> %d,%d", rc.right, rc.bottom, *x, *y, fx, fy);
+    if (!InterlockedExchange(&g_mouseLogged, 1)) {
+        double cw, ch;
+        ClientSize(&cw, &ch);
+        Log("frontend: client %.0fx%.0f, mouse %d,%d -> %d,%d", cw, ch, *x, *y, fx, fy);
+    }
     *x = fx;
     *y = fy;
 }
 
-volatile LONG g_virtualX = -1, g_virtualY = -1;  // test runs: a scripted cursor in menu space
-
 void __fastcall GetMouse(int* x, int* y) {
     o_GetMouse(x, y);
-    if (g_virtualX >= 0) {  // never the real mouse in a test
-        *x = g_virtualX;
-        *y = g_virtualY;
-        return;
-    }
     MapMouse(x, y);
+}
+
+// Test runs: the cursor, in client pixels of the emulated full-screen window.
+volatile LONG g_testX = -1, g_testY = -1;
+decltype(&GetCursorPos) o_GetCursorPos;
+decltype(&ScreenToClient) o_ScreenToClient;
+
+BOOL WINAPI h_GetCursorPos(POINT* p) {
+    if (g_testX < 0) return o_GetCursorPos(p);
+    p->x = g_testX;
+    p->y = g_testY;
+    return TRUE;
+}
+
+BOOL WINAPI h_ScreenToClient(HWND hwnd, POINT* p) {
+    if (g_testX < 0 || hwnd != *kWindow) return o_ScreenToClient(hwnd, p);
+    return TRUE;  // the scripted point is already in the client
+}
+
+// A point in menu space to the client pixel at its centre.
+bool MenuToClient(int mx, int my, int* cx, int* cy) {
+    double s, ox, oy;
+    if (!Frame(&s, &ox, &oy)) return false;
+    *cx = (int)(ox + (mx + g_xo + 0.5) * s);
+    *cy = (int)(oy + (my + 0.5) * s);
+    return true;
 }
 
 int __fastcall GetDoubleClick(int* x, int* y) {
@@ -193,8 +246,80 @@ void Check(bool ok, const char* what) {
 bool InMenu() { return g_scope > 0; }
 
 void SetVirtualCursor(int x, int y) {
-    g_virtualX = x;
-    g_virtualY = y;
+    int cx, cy;
+    if (!MenuToClient(x, y, &cx, &cy)) return;
+    SetTestCursor(cx, cy);
+}
+
+void SetTestCursor(int x, int y) {
+    g_testY = y;
+    g_testX = x;
+}
+
+void InstallTestCursor() {
+    bool ok = hook::Import(hook::FindImport(nullptr, "USER32.dll", "GetCursorPos"), &h_GetCursorPos, &o_GetCursorPos) &&
+              hook::Import(hook::FindImport(nullptr, "USER32.dll", "ScreenToClient"), &h_ScreenToClient,
+                           &o_ScreenToClient);
+    double cw = 0, ch = 0;
+    ClientSize(&cw, &ch);
+    SetTestCursor(0, 0);  // parked in the corner until a script moves it
+    Log("frontend: test cursor in a %.0fx%.0f client (%s)", cw, ch, ok ? "ok" : "hooks FAILED");
+}
+
+// Hover the centre of every visible, focusable item of the current screen
+// through the real mouse path and check the game focuses that item; then the
+// client's corners, which must reach the frame's corners.
+void Sweep() {
+    const uint8_t* screen = *(const uint8_t* const*)0x688abc;  // the current front-end screen
+    const volatile int* focus = (const volatile int*)0x688770;
+    if (!screen || g_scope <= 0) {
+        Log("sweep: no front-end screen");
+        return;
+    }
+    char name[64];
+    snprintf(name, sizeof name, "%s", (const char*)screen);
+    int count = *(const int*)(screen + 0x104), tried = 0, failed = 0, shared = 0;
+    auto item = [&](int i) { return (const int32_t*)(screen + 0x130 + i * 0x158); };
+    for (int i = 0; i < count && i < 99; i++) {
+        const int32_t* it = item(i);
+        int x = it[6], y = it[7], w = it[8], h = it[9], state = it[10], visible = it[11];
+        if (state <= 0 || !visible || w <= 0 || h <= 0) continue;
+        tried++;
+        int mx = x + w / 2, my = y + h / 2;
+        SetVirtualCursor(mx, my);
+        Sleep(150);  // a few menu frames (48 fps)
+        int got = *focus;
+        if (got == i) continue;
+        // Another item over the same point (scroll arrows, or a volume
+        // slider, whose bar is wider than its item) takes the hover: the
+        // game's own layout, not a mapping fault.
+        if (got >= 0 && got < count) {
+            const int32_t* o = item(got);
+            bool slider = o[17] != 0;  // +0x44 level bar
+            if (slider || (mx >= o[6] && mx <= o[6] + o[8] && my >= o[7] && my <= o[7] + o[9])) {
+                shared++;
+                continue;
+            }
+        }
+        failed++;
+        Log("sweep: %s item %d \"%s\" at %d,%d (%dx%d): focus %d", name, i, (const char*)it + 0x59, mx, my, w, h,
+            got);
+    }
+    double cw, ch, s, ox, oy;
+    ClientSize(&cw, &ch);
+    Frame(&s, &ox, &oy);
+    // The client's corners must reach the frame's (in menu space, -xo,0 and
+    // 640+xo-1,479; beyond them in the bars of a wider screen).
+    int corners[2][2] = {{0, 0}, {(int)cw - 1, (int)ch - 1}};
+    for (int k = 0; k < 2; k++) {
+        int x = corners[k][0], y = corners[k][1];
+        MapMouse(&x, &y);
+        bool ok = k == 0 ? x <= -g_xo && y <= 0 : x >= 640 + g_xo - 1 && y >= 479;
+        if (!ok) failed++;
+        Log("sweep: client corner %d,%d -> menu %d,%d%s", corners[k][0], corners[k][1], x, y, ok ? "" : " FAILED");
+    }
+    Log("sweep: %s: %d items hovered, %d under another item, %d failed (client %.0fx%.0f, frame %dx480 at %.0f,%.0f, "
+        "x%.3f)", name, tried, shared, failed, cw, ch, g_w, ox, oy, s);
 }
 bool InKeyCapture() { return g_capture > 0; }
 

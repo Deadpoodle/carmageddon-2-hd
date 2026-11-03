@@ -260,6 +260,21 @@ void OnLoadLibrary(const char* name, HMODULE module) {
     }
 }
 
+// C2HD_HEADLESS=3: a real full-screen run for on-screen checks (the mouse,
+// Alt+F4, the picture), driven by real input from outside. Only the test
+// class (so a copy the player has open doesn't make it quit at start-up, nor
+// it the player's), logged message boxes and mute; nothing else is touched.
+bool InstallScreen() {
+    g_visible = true;
+    bool ok = HookUser32(nullptr, "CreateWindowExA", &h_CreateWindowExA, &o_CreateWindowExA) &&
+              HookUser32(nullptr, "RegisterClassA", &h_RegisterClassA, &o_RegisterClassA) &&
+              HookUser32(nullptr, "FindWindowA", &h_FindWindowA, &o_FindWindowA) &&
+              HookUser32(nullptr, "MessageBoxA", &h_MessageBoxA, &o_MessageBoxA);
+    Log("headless (full screen): hooks %s", ok ? "ok" : "FAILED");
+    if (ok) CloseHandle(CreateThread(nullptr, 0, &MuteThread, nullptr, 0, nullptr));
+    return ok;
+}
+
 bool Install(bool visible) {
     g_active = true;
     g_visible = visible;

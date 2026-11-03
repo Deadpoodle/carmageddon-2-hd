@@ -13,7 +13,16 @@ bool InMenu();
 // The Controls screen is waiting for a key to bind.
 bool InKeyCapture();
 
-// Test runs: the game's mouse position, in 640x480 menu space, from a script.
+// Test runs: the cursor goes through the game's real mouse path (GetCursorPos,
+// ScreenToClient, the mapping above) in the client of an emulated full-screen
+// window, the output size. Before the game runs.
+void InstallTestCursor();
+// The cursor at a point in 640x480 menu space...
 void SetVirtualCursor(int x, int y);
+// ...or at a client pixel.
+void SetTestCursor(int x, int y);
+// Hover every focusable item of the current screen and check the game focuses
+// it, and check the client's corners reach the frame's; results to the log.
+void Sweep();
 
 }  // namespace frontend
