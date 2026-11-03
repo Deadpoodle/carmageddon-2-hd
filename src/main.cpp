@@ -204,6 +204,18 @@ void LogHooks() {
     }
 }
 
+// C2HD_PEDLOG=1 (diagnostic): every pedestrian move change, through
+// SetPedMove 0x4cbcd0 (fastcall ped, move; then rate, blend, end flag, time,
+// state; callee pops 0x14), with the caller (re/peds.md).
+using SetPedMoveFn = int(__fastcall*)(uintptr_t, int, int, int, int, int, int);
+SetPedMoveFn o_SetPedMove;
+
+int __fastcall LogSetPedMove(uintptr_t ped, int move, int rate, int blend, int end, int time, int state) {
+    Log("ped %08lx move %d rate %d blend %d end %d time %d state %d from %p", (unsigned long)ped, move, rate, blend,
+        end, time, state, __builtin_return_address(0));
+    return o_SetPedMove(ped, move, rate, blend, end, time, state);
+}
+
 void StartTests() {
     AddVectoredExceptionHandler(0, &CrashLogger);
     if (Env("C2HD_GAMELOG") == "1") {
@@ -217,6 +229,11 @@ void StartTests() {
         audio::InstallLog();
     }
     if (Env("C2HD_FLOWLOG") == "1") frontend::InstallFlowLog();
+    if (Env("C2HD_PEDLOG") == "1") {
+        static const uint8_t prologue[6] = {0x81, 0xec, 0x28, 0x01, 0x00, 0x00};  // sub esp, 0x128
+        o_SetPedMove = (SetPedMoveFn)hook::Detour(0x4cbcd0, prologue, 6, (const void*)&LogSetPedMove);
+        Log("test: pedestrian moves to the log: %s", o_SetPedMove ? "on" : "FAILED");
+    }
     if (Env("C2HD_TEST_EXIT") == "window") {
         bool ok = hook::Import(hook::FindImport(nullptr, "USER32.dll", "CreateWindowExA"), &ExitAtCreateWindow,
                                &real_CreateWindowExA);
