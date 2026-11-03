@@ -20,4 +20,7 @@ void* CreateDevice(REFGUID guid);
 // keys for their actions (race) or as arrows/Return/Esc (menus).
 void InjectKeys(BYTE* state, BYTE (*targetScan)(int line));
 
+// Test runs: the scripted pad's buttons (XINPUT_GAMEPAD_*), in place of XInput.
+void SetTestButtons(WORD buttons);
+
 }  // namespace controller

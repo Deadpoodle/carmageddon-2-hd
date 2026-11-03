@@ -20,6 +20,7 @@
 #include "input.h"
 
 #include <dinput.h>
+#include <xinput.h>
 #include <windows.h>
 
 #include <cctype>
@@ -274,7 +275,21 @@ struct Step {
     bool client = false;  // PMOUSE=x;y: x,y are client pixels, not menu space
     bool sweep = false;   // SWEEP hovers every item of the current screen
     UINT message = 0;     // ALTF4 / CLOSE post that window message
+    WORD pad = 0;         // PAD=UP|DOWN|LEFT|RIGHT|A|B|X|Y|START|BACK|LB|RB holds that pad button
+    const KeyName* sweepKey = nullptr;  // KEYSWEEP[=key]: press it round the screen (default DOWN)
+    std::string goTo;     // GOTO=name: press Down until that item has the focus
+    DWORD wait = 0;       // WAIT=s: pause (later steps' times count from the start, so a
+                          // tour with long steps can use small times and WAITs)
 };
+
+// A scripted key press as a person makes it: down for a few menu frames, then
+// up for a few (the menus act on the press, at 48 fps).
+void Press(BYTE dik) {
+    g_script[dik] = 0x80;
+    Sleep(120);
+    g_script[dik] = 0;
+    Sleep(150);
+}
 std::vector<Step> g_steps;
 
 DWORD WINAPI ScriptThread(void*) {
@@ -284,7 +299,18 @@ DWORD WINAPI ScriptThread(void*) {
         if (s.ms > now) Sleep(s.ms - now);
         HWND hwnd = headless::Window();
         if (!s.key) {
-            if (s.message) {
+            if (s.wait) {
+                Sleep(s.wait);
+            } else if (s.sweepKey) {
+                frontend::KeySweep(&Press, s.sweepKey->dik, s.sweepKey->name);
+            } else if (!s.goTo.empty()) {
+                frontend::GoTo(&Press, s.goTo.c_str());
+            } else if (s.pad) {
+                Log("script: pad %#x (%lu ms)", s.pad, s.hold);
+                controller::SetTestButtons(s.pad);
+                Sleep(s.hold);
+                controller::SetTestButtons(0);
+            } else if (s.message) {
                 Log("script: post %s", s.message == WM_CLOSE ? "WM_CLOSE" : "Alt+F4");
                 if (hwnd && s.message == WM_CLOSE) PostMessageA(hwnd, WM_CLOSE, 0, 0);
                 else if (hwnd) PostMessageA(hwnd, WM_SYSKEYDOWN, VK_F4, (0x3e << 16) | (1 << 29) | 1);
@@ -381,6 +407,9 @@ void StartScript(const char* script) {
     // MOUSE=x;y (menu space) and PMOUSE=x;y (client pixels) move the cursor
     // through the game's mouse path; CLICK clicks; SWEEP hovers every item.
     // ALTF4 and CLOSE post Alt+F4 and WM_CLOSE to the game's window.
+    // PAD=DOWN/ms holds a button of a scripted pad (test runs never read a real one).
+    // KEYSWEEP[=S] presses Down (or S) round the screen and logs what it reaches;
+    // GOTO=Settings presses Down until that item has the focus.
     std::string s = script;
     size_t pos = 0;
     while (pos < s.size()) {
@@ -407,6 +436,33 @@ void StartScript(const char* script) {
             else if (name == "ALTF4") st.message = WM_SYSKEYDOWN;
             else if (name == "CLOSE") st.message = WM_CLOSE;
             else if (name == "CLICK") st.click = true;
+            else if (name == "KEYSWEEP") st.sweepKey = FindKey("DOWN");
+            else if (name.rfind("KEYSWEEP=", 0) == 0) {
+                if (!(st.sweepKey = FindKey(name.substr(9)))) {
+                    Log("script: unknown key %s", name.c_str());
+                    pos = end + 1;
+                    continue;
+                }
+            } else if (name.rfind("GOTO=", 0) == 0) st.goTo = name.substr(5);
+            else if (name.rfind("WAIT=", 0) == 0) st.wait = (DWORD)(atof(name.c_str() + 5) * 1000);
+            else if (name.rfind("PAD=", 0) == 0) {
+                static const struct {
+                    const char* name;
+                    WORD bit;
+                } kButtons[] = {{"UP", XINPUT_GAMEPAD_DPAD_UP},    {"DOWN", XINPUT_GAMEPAD_DPAD_DOWN},
+                                {"LEFT", XINPUT_GAMEPAD_DPAD_LEFT}, {"RIGHT", XINPUT_GAMEPAD_DPAD_RIGHT},
+                                {"A", XINPUT_GAMEPAD_A},            {"B", XINPUT_GAMEPAD_B},
+                                {"X", XINPUT_GAMEPAD_X},            {"Y", XINPUT_GAMEPAD_Y},
+                                {"START", XINPUT_GAMEPAD_START},    {"BACK", XINPUT_GAMEPAD_BACK},
+                                {"LB", XINPUT_GAMEPAD_LEFT_SHOULDER}, {"RB", XINPUT_GAMEPAD_RIGHT_SHOULDER}};
+                for (const auto& b : kButtons)
+                    if (name.substr(4) == b.name) st.pad = b.bit;
+                if (!st.pad) {
+                    Log("script: unknown pad button %s", name.c_str());
+                    pos = end + 1;
+                    continue;
+                }
+            }
             else if (!(st.key = FindKey(name))) {
                 Log("script: unknown key %s", name.c_str());
                 pos = end + 1;

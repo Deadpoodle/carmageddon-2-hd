@@ -26,5 +26,11 @@ void SetTestCursor(int x, int y);
 // Hover every focusable item of the current screen and check the game focuses
 // it, and check the client's corners reach the frame's; results to the log.
 void Sweep();
+// Press a key (with `press`) round the current screen and log the focus order
+// and any focusable item it never reaches (a radio row counts as reached when
+// any of its words is).
+void KeySweep(void (*press)(unsigned char dik), unsigned char dik, const char* keyName);
+// Press Down until the item named `target` has the focus (false if never).
+bool GoTo(void (*press)(unsigned char dik), const char* target);
 
 }  // namespace frontend

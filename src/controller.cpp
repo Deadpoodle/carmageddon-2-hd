@@ -38,6 +38,7 @@ typedef DWORD(WINAPI* XInputGetState_t)(DWORD, XINPUT_STATE*);
 XInputGetState_t g_xinputGetState;
 
 XINPUT_GAMEPAD g_pad;  // the last read, cleared when disconnected
+volatile LONG g_testButtons;  // test runs: a scripted pad (always connected) instead of XInput
 DWORD g_lastRead, g_lastMissing;
 bool g_connected;
 HWND* const kWindow = (HWND*)0x6ad4c8;
@@ -49,6 +50,11 @@ void ReadPad() {
     if (!g_connected && now - g_lastMissing < 1000) return;  // a missing pad is asked about once a second
     XINPUT_STATE st = {};
     bool ok = g_xinputGetState && g_xinputGetState(0, &st) == ERROR_SUCCESS;
+    if (headless::Active()) {  // never a real pad in a test
+        st = {};
+        st.Gamepad.wButtons = (WORD)g_testButtons;
+        ok = true;
+    }
     // The game reads the joystick even in the background: only the focused game drives.
     if (ok && !headless::Active() && GetForegroundWindow() != *kWindow) ok = false, st = {};
     if (ok != g_connected) Log("controller: pad %s", ok ? "connected" : "not connected");
@@ -239,6 +245,8 @@ void InjectKeys(BYTE* state, BYTE (*targetScan)(int line)) {
     if (g_pad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)
         if (BYTE scan = targetScan(kBrakeLine)) state[scan] = 0x80;
 }
+
+void SetTestButtons(WORD buttons) { g_testButtons = buttons; }
 
 void Install() {
     g_enabled = settings::Get("Controller", "Enabled", "1") != "0";

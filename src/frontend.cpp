@@ -15,9 +15,11 @@
 
 #include <windows.h>
 
+#include <cctype>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <string>
 
 #include "headless.h"
 #include "hook.h"
@@ -256,6 +258,75 @@ void SetTestCursor(int x, int y) {
     g_testX = x;
 }
 
+// The focused item's name on the current screen ("" when none).
+std::string FocusName() {
+    const uint8_t* screen = *(const uint8_t* const*)0x688abc;
+    int f = *(const volatile int*)0x688770;
+    if (!screen || f < 0 || f >= 99) return "";
+    return (const char*)screen + 0x130 + f * 0x158 + 0x59;
+}
+
+bool SameName(std::string a, std::string b) {
+    for (std::string* s : {&a, &b})
+        for (char& c : *s) c = c == '_' ? ' ' : (char)toupper((unsigned char)c);
+    return a == b;
+}
+
+void KeySweep(void (*press)(BYTE dik), BYTE dik, const char* keyName) {
+    const uint8_t* screen = *(const uint8_t* const*)0x688abc;
+    if (!screen || g_scope <= 0) {
+        Log("keysweep: no front-end screen");
+        return;
+    }
+    char name[64];
+    snprintf(name, sizeof name, "%s", (const char*)screen);
+    int count = *(const int*)(screen + 0x104);
+    auto item = [&](int i) { return (const int32_t*)(screen + 0x130 + i * 0x158); };
+    bool visited[99] = {};
+    std::string order;
+    for (int n = 0; n < count + 4; n++) {
+        press(dik);
+        if (*(const uint8_t* const*)0x688abc != screen) {
+            Log("keysweep: %s: the screen changed while pressing %s", name, keyName);
+            return;
+        }
+        int f = *(const volatile int*)0x688770;
+        if (f >= 0 && f < 99) {
+            visited[f] = true;
+            order += " " + std::to_string(f);
+        }
+    }
+    // Reached: visited, or in a row (radio group) that focus reached.
+    bool groupHit[64] = {};
+    for (int i = 0; i < count && i < 99; i++)
+        if (visited[i] && item(i)[16] > 0 && item(i)[16] < 64) groupHit[item(i)[16]] = true;
+    int focusable = 0, missed = 0;
+    std::string missing;
+    for (int i = 0; i < count && i < 99; i++) {
+        const int32_t* it = item(i);
+        if (it[10] <= 0 || !it[11]) continue;
+        focusable++;
+        if (visited[i] || (it[16] > 0 && it[16] < 64 && groupHit[it[16]])) continue;
+        missed++;
+        missing += " " + std::to_string(i) + "\"" + std::string((const char*)it + 0x59) + "\"";
+    }
+    Log("keysweep: %s with %s: focus%s", name, keyName, order.c_str());
+    Log("keysweep: %s: %d focusable, %d not reachable by %s%s%s", name, focusable, missed, keyName,
+        missed ? ":" : "", missing.c_str());
+}
+
+bool GoTo(void (*press)(BYTE dik), const char* target) {
+    for (int n = 0; n < 99; n++) {
+        if (SameName(FocusName(), target)) {
+            Log("goto: %s after %d presses", target, n);
+            return true;
+        }
+        press(0xd0);  // DIK_DOWN
+    }
+    Log("goto: %s not reached by Down", target);
+    return false;
+}
+
 // Diagnostic (C2HD_FLOWLOG=1): the main menu's outcome as the race flow sees it.
 void (*o_MainMenu)();
 void MainMenuLogged() {
@@ -265,7 +336,28 @@ void MainMenuLogged() {
         *(volatile int*)0x75bc24, *(volatile int*)0x6883a8);
 }
 
+// ...and every change of screen, focused item and mouse mode, polled.
+DWORD WINAPI FocusLog(void*) {
+    const volatile uintptr_t* screen = (const volatile uintptr_t*)0x688abc;
+    const volatile int* focus = (const volatile int*)0x688770;
+    const volatile int* mouseMode = (const volatile int*)0x79ecb8;
+    uintptr_t lastScreen = 1;
+    int lastFocus = -2, lastMode = -1;
+    for (;;) {
+        Sleep(10);
+        uintptr_t sc = *screen;
+        int f = *focus, m = *mouseMode;
+        if (sc == lastScreen && f == lastFocus && m == lastMode) continue;
+        char name[32] = "-";
+        if (sc) snprintf(name, sizeof name, "%s", (const char*)sc);
+        const char* item = sc && f >= 0 && f < 99 ? (const char*)(sc + 0x130 + f * 0x158 + 0x59) : "";
+        Log("flow: screen %s, focus %d \"%s\", mouse mode %d", name, f, item, m);
+        lastScreen = sc, lastFocus = f, lastMode = m;
+    }
+}
+
 void InstallFlowLog() {
+    CloseHandle(CreateThread(nullptr, 0, &FocusLog, nullptr, 0, nullptr));
     o_MainMenu = (void (*)())0x494540;
     Log("flow log: %s", hook::Redirect(0x503d68, 0xe8, 0x494540, (const void*)&MainMenuLogged) ? "on" : "FAILED");
 }
