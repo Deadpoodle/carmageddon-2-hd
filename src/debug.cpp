@@ -134,7 +134,8 @@ void Draw() {
     snprintf(lines[n++], 64, "MAPXF %.3f %.3f  T %.1f %.1f", xf[0], xf[6], xf[9], xf[10]);
     snprintf(lines[n++], 64, "MAPPM %dX%d  CUT %dX%d", map ? *(uint16_t*)(map + 0x34) : 0,
              map ? *(uint16_t*)(map + 0x36) : 0, *(int*)0x74ab94, *(int*)0x74abec);
-    snprintf(lines[n++], 64, "PEDS %d  BODIES %d", ActivePeds(), Bodies());
+    snprintf(lines[n++], 64, "PEDS %d  BODIES %d  DRONES %d/%d", ActivePeds(), Bodies(), *(int*)0x684500,
+             *(int*)0x681fb4);  // drones drawn / moving
     snprintf(lines[n++], 64, "CARMA2-HD %s", C2HD_VERSION);
     int x = *(uint16_t*)(screen + 0x34) - 190;
     int y = *(int*)0x74abb0 - 6 - n * kLineHeight;  // above the minimap (HeadupMapY)

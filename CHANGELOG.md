@@ -4,6 +4,10 @@ Carmageddon II HD follows [semantic versioning](https://semver.org/). Until a fi
 
 The game itself is the Steam release, which labels itself `v1.02a`. It is the same build as the official "Super Patch V2.0" (both game exes were built on 30 November 1998). Steam's copy has its CD protection removed, plus an extra import for its CD-music player.
 
+## 0.21.0 (2026-11-03)
+- Pedestrians, traffic and opponents' detailed models no longer pop in just ahead of you. They follow the Draw distance setting like the scenery. At Max, pedestrians come alive out to 30 units instead of 12, traffic is drawn out to 43 instead of 15, and up to 64 traffic cars move at once instead of 12. Opponents switch to their full models at 57 units instead of 20. Original keeps the game's own distances.
+- The debug overlay counts traffic: drawn / moving.
+
 ## 0.20.0 (2026-11-03)
 - Pedestrians in network races (`[Network] Pedestrians`, on by default). The original game has none online. Each player's game runs its own pedestrians: they aren't shared between players, so each sees a different crowd, and killing every pedestrian no longer ends the race. They appear on the normal tracks (the race game types); most network arenas have none to spawn.
 

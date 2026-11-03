@@ -28,6 +28,7 @@
 #include "netshim.h"
 #include "options.h"
 #include "peds.h"
+#include "actors.h"
 #include "quit.h"
 #include "log.h"
 #include "settings.h"
@@ -471,6 +472,7 @@ void Start() {
     icons::Install();
     wrecks::Install();
     peds::Install();
+    actors::Install();
     debug::Install();
     fixes::Install();
     music::Install();

@@ -50,7 +50,7 @@ Versions and what changed in each: [CHANGELOG.md](CHANGELOG.md). The main menu s
 - Widescreen and ultrawide (21:9, 32:9) with a wider view (Hor+), not a stretched one.
 - The race HUD spread to the screen's edges (or kept to 16:9, 4:3 or 21:9), with the gaps in the top banner filled.
 - Menu and loading pictures stretched to fill a wide screen, with the menus themselves kept at their original shape in the middle. The mouse reaches the whole screen, edge to edge.
-- Scenery drawn up to about three times as far as the original.
+- Scenery drawn up to about three times as far as the original, and pedestrians, traffic and opponents' detailed models with it, so they no longer pop in just ahead of you.
 
 **Visuals**
 - Anti-aliasing (2x, 4x or 8x), 16x anisotropic texture filtering with mipmaps, and full-precision colour instead of 16-bit dithering.
