@@ -18,6 +18,7 @@
 #include "loader.h"
 #include "movie.h"
 #include "music.h"
+#include "netshim.h"
 #include "options.h"
 #include "log.h"
 #include "settings.h"
@@ -166,6 +167,7 @@ void Start() {
     sharptext::Install();
     music::Install();
     StartTests();
+    netshim::Install();  // after the test harness: tests stay on loopback
 }
 
 }  // namespace
