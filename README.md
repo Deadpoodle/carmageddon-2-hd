@@ -301,7 +301,6 @@ Press **Esc** while typing to cancel. Press **Return** on an empty box to clear 
 ## Not done yet
 
 - **Zombie and alien pedestrians**, the German and UK releases' modes. They need the original disc data to look right, so the option is greyed out.
-- **AI opponents in network races.**
 
 ## Building
 
