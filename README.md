@@ -72,6 +72,7 @@ Versions and what changed in each: [CHANGELOG.md](CHANGELOG.md). The main menu s
 **Network**
 - LAN games on modern Windows. The game only speaks IPX, which Windows no longer has; the patch carries it over UDP.
 - Join a game over the internet by typing the host's address on the Network screen. Three or more players work too: the host's copy passes on what the joining players send each other.
+- Pedestrians in network races (each player's game has its own). The original game has none online.
 - The host's lobby shows the address to give friends, and opens the game's port on the router (UPnP) while hosting.
 - Several copies on one PC, for testing.
 
@@ -286,6 +287,7 @@ Press **Esc** while typing to cancel. Press **Return** on an empty box to clear 
 |---|---|---|
 | `Port` | 47700 | UDP port. The first copy on a PC uses it, and further copies the next ones, up to Port+7. |
 | `JoinAddress` | (empty) | The address the IP box sets. |
+| `Pedestrians` | 1 | 1 = pedestrians in network races. Each player's game runs its own, so players see different crowds; kills earn your own credits only. 0 = none, as the original. |
 | `Transport` | udp | `udp` is the patch; `ipxwrapper` is the store's original, LAN only. |
 | `UPnP` | 1 | 1 = ask the router for the public address (and to open the port) while hosting; 0 = don't talk to the router. |
 | `OpenPort` | 1 | 1 = ask the router to open the port while hosting; 0 = only ask for the address. |

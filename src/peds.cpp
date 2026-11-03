@@ -19,6 +19,18 @@
 // Everything else runs the moved instructions and returns, as before.
 // Skipping every asleep body is not enough: a car waiting on the grid is
 // asleep too.
+//
+// Pedestrians in network races ([Network] Pedestrians, re/network-peds.md):
+// the original spawns none online. Its only network check in the ped code is
+// in the track spawner 0x4d2cc0 (jne at 0x4d2cd7 when gNet_mode 0x68b918 is
+// set), so that jump goes: each machine then runs its own pedestrians, which
+// are never sent (no ped messages exist). One more change keeps races going:
+// in race type 0, the only type network races use, killing the last ped
+// (0x4cd160: count 0x7447cc reaches 0x7447d4) shows "Every pedestrian
+// murdered" and calls RaceCompleted(1), which on the host would end the race
+// for everyone. In network games that test now takes the "peds left" path
+// (0x4cd1cd). Time bonuses, the HUD kill counter, ped power-ups and scoring
+// already ignore peds online.
 #include "peds.h"
 
 #include <windows.h>
@@ -30,6 +42,7 @@
 
 #include "hook.h"
 #include "log.h"
+#include "settings.h"
 
 namespace peds {
 namespace {
@@ -90,6 +103,23 @@ void Install() {
     bool move = Divert(0x4b6721, moveOld, 5, moveStub, sizeof moveStub, {{24, 0x4b6726}, {29, 0x4b6737}});
     Log("peds: asleep ped bodies keep their animated pose: copy-back %s, drift %s", copy ? "on" : "FAILED",
         move ? "on" : "FAILED");
+    if (settings::Get("Network", "Pedestrians", "1") == std::string("1")) {
+        // 0x4d2cd7: jne 0x4d334e (network: no spawning) -> six nops.
+        static const uint8_t gateOld[6] = {0x0f, 0x85, 0x71, 0x06, 0x00, 0x00};
+        static const uint8_t gateNew[6] = {0x90, 0x90, 0x90, 0x90, 0x90, 0x90};
+        bool gate = hook::Patch(0x4d2cd7, gateOld, gateNew, 6);
+        // 0x4cd1a3: mov ecx, 0x1a (the all-dead message, then RaceCompleted).
+        static const uint8_t endOld[5] = {0xb9, 0x1a, 0x00, 0x00, 0x00};
+        static const uint8_t endStub[] = {
+            0x83, 0x3d, 0x18, 0xb9, 0x68, 0x00, 0x00,  // cmp dword [0x68b918], 0 (gNet_mode)
+            0x0f, 0x85, 0, 0, 0, 0,                    // jne 0x4cd1cd (peds left: carry on)
+            0xb9, 0x1a, 0x00, 0x00, 0x00,              // mov ecx, 0x1a (moved)
+            0xe9, 0, 0, 0, 0,                          // jmp 0x4cd1a8
+        };
+        bool end = Divert(0x4cd1a3, endOld, 5, endStub, sizeof endStub, {{9, 0x4cd1cd}, {19, 0x4cd1a8}});
+        Log("peds: pedestrians in network races: spawning %s, no race end when all are killed %s",
+            gate ? "on" : "FAILED", end ? "on" : "FAILED");
+    }
 }
 
 }  // namespace peds

@@ -64,6 +64,8 @@ const char* kDefaultIni =
     "; or 203.0.113.5:47700; the game then appears in the Network screen's list as on a LAN.\r\n"
     "; The Network screen's IP field sets this too\r\n"
     "JoinAddress=\r\n"
+    "; 1 = pedestrians in network races (each player's game has its own; the original has none online)\r\n"
+    "Pedestrians=1\r\n"
     "; udp (the patch) or ipxwrapper (the store's original network layer, LAN only)\r\n"
     "Transport=udp\r\n"
     "\r\n"
