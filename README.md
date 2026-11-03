@@ -84,26 +84,32 @@ These are only in `Carma2HD.ini`:
 
 ## Controls
 
-**Classic** (the default) keeps the game's own keys: driving is on the numeric keypad, as the game shipped.
+The game keeps four key sets, **A** to **D**, on its Controls screen (Options → Configure Controls, beside CONFIG in the Keys\Buttons panel). The patch adds a fifth, **E**: the modern controls. Choosing E there, or Controls → Modern on the HD tab, switches to it. Choosing A–D, or Classic, switches back. A is the game's default, with driving on the numeric keypad.
 
-**Modern** (`[Controls] Scheme=modern`, or Controls on the HD tab):
+**Set E's keys:**
 
 | Action | Key |
 |---|---|
-| Accelerate / Brake | W or Up / S or Down |
-| Steer | A or Left / D or Right |
+| Accelerate / Brake | W / S (the Up / Down arrows too) |
+| Steer | A / D (the Left / Right arrows too) |
 | Handbrake | Space |
-| Repair | F |
+| Use power-up | E |
+| Next / previous power-up | Q / Z |
+| Power-up list | G |
+| Repair (hold) | F |
 | Recover | R |
-| Use power-up / next power-up | E / Q |
-| Camera | C |
+| Wheelspin | X |
+| Camera / cockpit | C / V |
 | Action replay | P |
 | Look up, down, left, right | I, K, J, L |
-| Sound on/off | F9 (moved from S) |
+| Map / mini-map | Tab / M |
+| Horn | H |
+| Target lock / cycle target | T / Y |
+| Sound on/off | F9 (S in sets A–D) |
 
-In menus, W/A/S/D move around like the arrows, Return selects and Esc goes back.
+**Remapping:** on the Controls screen, pick the set, click an action, then press the new key. The game saves each set in its own file (`data\KEYMAP_4.TXT` for E). The game's rules apply: a key already used by another action leaves that action unset, and OK won't close the screen until it has a key again. With set E, the arrow keys keep driving whatever you've moved the driving actions to. Your driving keys also move around the menus; Return selects and Esc goes back.
 
-**Your own keys** go in `[Keys]` in `Carma2HD.ini`, in either scheme. For example, `Handbrake=SPACE,LSHIFT` or `Camera=V`. Key names are DirectInput names: `W`, `UP`, `SPACE`, `LSHIFT`, `LCONTROL`, `RETURN`, `NUMPAD8`, `F1` and so on. The full list of actions is in the ini file.
+**Extra keys** for any action go in `[Keys]` in `Carma2HD.ini`, with any set. For example, `Handbrake=SPACE,LSHIFT`. Key names are DirectInput names: `W`, `UP`, `SPACE`, `LSHIFT`, `LCONTROL`, `RETURN`, `NUMPAD8`, `F1` and so on. The full list of actions is in the ini file.
 
 **Controller** (any XInput pad, e.g. an Xbox controller):
 

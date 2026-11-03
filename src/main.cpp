@@ -17,6 +17,7 @@
 #include "headless.h"
 #include "hook.h"
 #include "input.h"
+#include "keysets.h"
 #include "loader.h"
 #include "movie.h"
 #include "music.h"
@@ -261,6 +262,7 @@ void Start() {
     input::LoadBindings();
     options::Install();
     hdtab::Install();
+    keysets::Install();
     controller::Install();
     display::Install();
     movie::Install();

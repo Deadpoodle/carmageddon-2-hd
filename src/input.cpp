@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "controller.h"
+#include "keysets.h"
 #include "frontend.h"
 #include "headless.h"
 #include "hook.h"
@@ -106,21 +107,25 @@ const KeyName* FindKey(const std::string& name) {
 }
 
 // ---------------------------------------------------------------------------
-// Actions: keymap lines (re/input.md §2) and the modern scheme's keys
+// Actions: keymap lines (re/input.md §2) and the modern scheme's extra keys.
+// The modern scheme is key set E (keysets.cpp), whose own keys are W/A/S/D
+// and the rest; here it only adds the arrows to the driving actions (on
+// whatever keys set E has for them, so remapping on the Controls screen
+// keeps them working).
 
 struct Action {
     const char* name;
     int line;          // index into gKey_mapping
-    const char* modern;  // the modern scheme's keys ("" = the game's own)
+    const char* modern;  // the modern scheme's extra keys ("" = none)
 };
 const Action kActions[] = {
-    {"Accelerate", 49, "W,UP"},   {"Brake", 50, "S,DOWN"},       {"Left", 47, "A,LEFT"},
-    {"Right", 48, "D,RIGHT"},     {"Handbrake", 54, "SPACE"},     {"Wheelspin", 56, ""},
-    {"Repair", 45, "F"},          {"Recover", 60, "R"},           {"UsePowerup", 61, "E"},
-    {"PowerupPrev", 63, ""},      {"PowerupNext", 64, "Q"},       {"PowerupList", 62, ""},
-    {"Camera", 75, "C"},          {"Map", 57, ""},                {"MiniMap", 35, ""},
-    {"Horn", 59, ""},             {"Replay", 58, "P"},            {"LookUp", 31, "I"},
-    {"LookDown", 32, "K"},        {"LookLeft", 33, "J"},          {"LookRight", 34, "L"},
+    {"Accelerate", 49, "UP"},     {"Brake", 50, "DOWN"},         {"Left", 47, "LEFT"},
+    {"Right", 48, "RIGHT"},       {"Handbrake", 54, ""},          {"Wheelspin", 56, ""},
+    {"Repair", 45, ""},           {"Recover", 60, ""},            {"UsePowerup", 61, ""},
+    {"PowerupPrev", 63, ""},      {"PowerupNext", 64, ""},        {"PowerupList", 62, ""},
+    {"Camera", 75, ""},           {"Map", 57, ""},                {"MiniMap", 35, ""},
+    {"Horn", 59, ""},             {"Replay", 58, ""},             {"LookUp", 31, ""},
+    {"LookDown", 32, ""},         {"LookLeft", 33, ""},           {"LookRight", 34, ""},
     {"HudDetail", 76, ""},        {"Chat", 71, ""},               {"TargetLock", 72, ""},
     {"CycleTarget", 73, ""},      {"BuyArmour", 67, ""},          {"BuyPower", 68, ""},
     {"BuyOffence", 69, ""},       {"NetPlayers", 70, ""},
@@ -170,14 +175,18 @@ BYTE TargetScan(int line) {
 const volatile int* const kMenuTyping = (const volatile int*)0x68b858;
 
 void Translate(BYTE* state) {
-    if (g_bindings.empty() || frontend::InKeyCapture() || *kMenuTyping) return;
+    if ((g_bindings.empty() && !g_menuArrows) || frontend::InKeyCapture() || *kMenuTyping) return;
     BYTE in[256];
     memcpy(in, state, 256);
     for (int i = 0; i < 256; i++)
         if (g_consumed[i]) state[i] = 0;
     if (frontend::InMenu()) {
         if (!g_menuArrows) return;
+        // The driving keys (the set's own, and any extra) move around the menus.
         static const BYTE arrows[4] = {DIK_UP, DIK_DOWN, DIK_LEFT, DIK_RIGHT};  // Accelerate, Brake, Left, Right
+        for (int a = kAccelerate; a <= kRight; a++)
+            if (BYTE own = TargetScan(kActions[a].line))
+                if (in[own] & 0x80) state[arrows[a]] = 0x80;
         for (const Binding& b : g_bindings)
             if (b.action <= kRight)
                 for (BYTE k : b.keys)
@@ -346,26 +355,6 @@ DWORD WINAPI ScriptThread(void*) {
     return 0;
 }
 
-// ---------------------------------------------------------------------------
-// The Controls screen refuses any key held by a hidden keymap line in 28..76
-// (re/input.md §2): mostly unused leftovers (q, w, e, F1-F3, p, KP-) and the
-// sound toggle on S. With the modern scheme, after every keymap load the
-// unused ones get key code 80 ("KP =", which can never be pressed) and the
-// sound toggle moves from S to F9, so W/S/Q/E can be bound there.
-
-constexpr int kNeverPressed = 80, kKeyS = 39, kKeyF9 = 99, kSoundLine = 37;
-const int kUnusedLines[] = {28, 29, 30, 36, 51, 52, 53, 55};
-void* g_loadKeyMapping;
-
-bool g_modern;
-
-void LoadKeyMapping() {
-    reinterpret_cast<void (*)()>(g_loadKeyMapping)();
-    if (!g_modern) return;
-    for (int line : kUnusedLines) kKeyMapping[line] = kNeverPressed;
-    if (kKeyMapping[kSoundLine] == kKeyS) kKeyMapping[kSoundLine] = kKeyF9;
-}
-
 }  // namespace
 
 void OnDirectInput(void* di) {
@@ -376,10 +365,8 @@ void OnDirectInput(void* di) {
 }
 
 void LoadBindings() {
-    std::string scheme = settings::Get("Controls", "Scheme", "classic");
-    for (char& c : scheme) c = (char)tolower((unsigned char)c);
-    bool modern = scheme == "modern";
-    g_modern = g_menuArrows = modern;
+    bool modern = keysets::Modern();  // key set E
+    g_menuArrows = modern;
     g_bindings.clear();  // may be called again when the HD tab changes the scheme
     memset(g_consumed, 0, sizeof g_consumed);
     int n = 0;
@@ -393,12 +380,7 @@ void LoadBindings() {
         g_bindings.push_back(b);
         n++;
     }
-    Log("input: %s scheme, %d actions with their own keys", modern ? "modern" : "classic", n);
-    if (modern && !g_loadKeyMapping) {
-        static const uint8_t start[6] = {0x81, 0xec, 0x00, 0x01, 0x00, 0x00};  // sub esp, 0x100
-        g_loadKeyMapping = hook::Detour(0x487e10, start, 6, (const void*)&LoadKeyMapping);
-        Log("input: unused keymap lines freed, sound toggle on F9: %s", g_loadKeyMapping ? "ok" : "FAILED");
-    }
+    Log("input: %s scheme, %d actions with extra keys", modern ? "modern (key set E)" : "classic", n);
 }
 
 void StartScript(const char* script) {

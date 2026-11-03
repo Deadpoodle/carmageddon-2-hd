@@ -19,6 +19,7 @@
 #include <string>
 
 #include "input.h"
+#include "keysets.h"
 #include "log.h"
 #include "options.h"
 #include "settings.h"
@@ -155,7 +156,7 @@ int Current(int r) {
                      {"auto", "1280x720", "1920x1080", "2560x1440", "3440x1440"});
     case kWidescreen: return settings::Get("Display", "Widescreen", "1") == "0" ? 1 : 0;
     case kHudWidth: return Index(settings::Get("Display", "HudWidth", "auto"), {"auto", "full", "16:9", "4:3"});
-    case kControls: return Index(settings::Get("Controls", "Scheme", "classic"), {"classic", "modern"});
+    case kControls: return keysets::Modern() ? 1 : 0;  // key set E
     case kPedestrians: return 0;
     case kDrawDistance:
         return Index(settings::Get("Display", "DrawDistance", "max"), {"original", "far", "further", "max"});
@@ -175,7 +176,7 @@ void Store(int r, int v) {
     case kResolution: settings::Set("Display", "Resolution", res[v]); break;
     case kWidescreen: settings::Set("Display", "Widescreen", v == 0 ? "1" : "0"); break;
     case kHudWidth: settings::Set("Display", "HudWidth", hud[v]); break;
-    case kControls: settings::Set("Controls", "Scheme", v ? "modern" : "classic"); break;
+    case kControls: keysets::SetModern(v == 1); break;
     case kDrawDistance: settings::Set("Display", "DrawDistance", dd[v]); break;
     case kAntialiasing: settings::Set("Visuals", "Antialiasing", kRows[r].words[v]); break;
     case kTextures: settings::Set("Visuals", "Textures", kRows[r].words[v]); break;

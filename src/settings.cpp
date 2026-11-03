@@ -55,9 +55,11 @@ const char* kDefaultIni =
     "Transport=udp\r\n"
     "\r\n"
     "[Controls]\r\n"
-    "; classic = the game's own keys (its default set drives on the numeric keypad)\r\n"
-    "; modern  = drive with W/A/S/D or the arrows, Space handbrake, and the keys listed under [Keys];\r\n"
-    ";           W/A/S/D also move around the menus\r\n"
+    "; Follows the key set chosen on the Controls screen (or on the HD tab):\r\n"
+    "; classic = the game's sets A-D (A, its default, drives on the numeric keypad)\r\n"
+    "; modern  = set E: W/A/S/D (and the arrows), Space handbrake, E/Q/Z/G power-ups, F repair,\r\n"
+    ";           R recover, C camera ... remappable on the Controls screen; W/A/S/D also move\r\n"
+    ";           around the menus\r\n"
     "Scheme=classic\r\n"
     "\r\n"
     "[Keys]\r\n"
@@ -67,9 +69,7 @@ const char* kDefaultIni =
     "; Actions: Accelerate Brake Left Right Handbrake Wheelspin Repair Recover UsePowerup PowerupPrev\r\n"
     ";   PowerupNext PowerupList Camera Map MiniMap Horn Replay LookUp LookDown LookLeft LookRight\r\n"
     ";   HudDetail Chat TargetLock CycleTarget BuyArmour BuyPower BuyOffence NetPlayers\r\n"
-    "; The modern scheme's keys: Accelerate=W,UP  Brake=S,DOWN  Left=A,LEFT  Right=D,RIGHT\r\n"
-    ";   Handbrake=SPACE  Repair=F  Recover=R  UsePowerup=E  PowerupNext=Q  Camera=C  Replay=P\r\n"
-    ";   LookUp=I  LookDown=K  LookLeft=J  LookRight=L\r\n";
+    "; The modern scheme (set E) adds: Accelerate=UP  Brake=DOWN  Left=LEFT  Right=RIGHT\r\n";
 
 std::string IniPath() { return GameDir() + "Carma2HD.ini"; }
 
