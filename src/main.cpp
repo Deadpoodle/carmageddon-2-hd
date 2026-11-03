@@ -25,6 +25,7 @@
 #include "netmenu.h"
 #include "netshim.h"
 #include "options.h"
+#include "peds.h"
 #include "quit.h"
 #include "log.h"
 #include "settings.h"
@@ -324,6 +325,21 @@ void PedFrameLog() {
         else if (d < best[1].d) best[1] = {d, p};
     }
     unsigned now = kGameTime();
+    static int bodyDumps;
+    static unsigned firstRace;
+    if (!firstRace) firstRace = now;
+    static const unsigned kDumpAt[3] = {0, 4000, 9000};  // game ms into the race
+    if (bodyDumps < 3 && now >= firstRace + kDumpAt[bodyDumps]) {
+        // The physics body list (0x74a5f0, next +0x220): asleep +0xec, matrix
+        // source +0xf0, kind +0x238, back-pointer +0x23c, actor +0
+        bodyDumps++;
+        int n = 0;
+        for (uintptr_t b = *(uintptr_t*)0x74a5f0; b && n < 400; b = *(uintptr_t*)(b + 0x220), n++)
+            Log("body %d %08lx asleep %d f0 %d kind %d back %08lx actor %08lx watched %d", n, (unsigned long)b,
+                *(uint8_t*)(b + 0xec), *(int*)(b + 0xf0), *(int*)(b + 0x238), (unsigned long)*(uint32_t*)(b + 0x23c),
+                (unsigned long)*(uint32_t*)b,
+                *(uint32_t*)b == (uint32_t)((uintptr_t)g_watchX - 0x24 - 0x2c) || *(uint32_t*)(b + 0x23c) == g_watchChar);
+    }
     if (watch && !g_watchPed && now > 15000) {
         float d = 100;
         for (int i = 0; peds && i < count; i++) {
@@ -450,6 +466,7 @@ void Start() {
     sharptext::Install();
     icons::Install();
     wrecks::Install();
+    peds::Install();
     music::Install();
     StartTests();
     if (netshim::Install()) netmenu::Install();  // after the test harness: tests stay on loopback

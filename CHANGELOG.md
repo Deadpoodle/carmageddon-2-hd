@@ -4,6 +4,10 @@ Carmageddon II HD follows [semantic versioning](https://semver.org/). Until a fi
 
 The game itself is the Steam release, which labels itself `v1.02a`. It is the same build as the official "Super Patch V2.0" (both game exes were built on 30 November 1998). Steam's copy has its CD protection removed, plus an extra import for its CD-music player.
 
+## 0.14.4 (2026-11-03)
+- Pedestrians no longer twitch. At high frame rates the game's physics kept putting a walking pedestrian's torso back where it had been, between animation steps, so the torso flicked back and forth and the pedestrian seemed to run on the spot. The original game had the same fault but at the frame rates of its day it never showed.
+- `[Visuals] FrameRate` takes any fixed rate from 20 to 100.
+
 ## 0.14.3 (2026-11-03)
 - A quick key tap skips a film. The game only looked at the keyboard every half second during films, so a short press was often missed. It now looks every 50 ms. The same goes for the game's other "press any key" waits.
 

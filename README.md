@@ -37,6 +37,7 @@ Versions and what changed in each: [CHANGELOG.md](CHANGELOG.md). The main menu s
 **Controls**
 - A modern keyboard scheme (W/A/S/D or the arrows), and any action can be put on any key.
 - Xbox-style controllers through XInput, in races and in menus.
+- Pedestrians animate smoothly at high frame rates (the original game's physics undid their animation between its 40 ms ticks, which made them twitch above about 30 fps).
 - Menus work with the arrows, W/S, a controller or the mouse. That includes the Wrecks gallery after a race, which the original left to the mouse: Left/Right (A/D, the D-pad) scroll the wrecked cars, Up/Down pick BUY or OK.
 
 **Network**
