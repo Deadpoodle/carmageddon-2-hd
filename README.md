@@ -22,7 +22,7 @@ It is a binary patch: a small `dinput.dll` that the game loads at start-up and t
 - Your desktop's resolution (or any you choose), rendered by [dgVoodoo2](https://github.com/dege-diosg/dgVoodoo2) through Direct3D 11.
 - Widescreen and ultrawide (21:9, 32:9) with a wider view (Hor+), not a stretched one.
 - The race HUD spread to the screen's edges (or kept to 16:9, 4:3 or 21:9), with the gaps in the top banner filled.
-- Menus, loading and message screens kept at their original shape in the middle of the screen. The mouse reaches the whole screen.
+- Menu and loading pictures stretched to fill a wide screen, with the menus themselves kept at their original shape in the middle. The mouse reaches the whole screen, edge to edge.
 - Scenery drawn up to about three times as far as the original.
 
 **Visuals**
@@ -78,6 +78,7 @@ Change these on the **HD** tab (Options → Settings → HD) or in `Carma2HD.ini
 
 These are only in `Carma2HD.ini`:
 - `[Display]`: `Fullscreen`. `borderless` (the default) is a screen-size window: no display mode change, and Windows can draw over it. `exclusive` gives the screen to the game alone.
+- `[Display]`: `Backdrops`. `stretch` (the default) stretches the menu and loading pictures to the full width. `bars` keeps the original 4:3 pictures between black bars.
 - `[Visuals]`: `Movies` (enhanced or original) and `SharpText` (on or off).
 - `[Network]`: see [Network play](#network-play).
 - `[Controller]`: `Enabled` (1 or 0).

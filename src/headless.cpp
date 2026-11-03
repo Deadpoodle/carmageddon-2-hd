@@ -277,6 +277,53 @@ bool InstallScreen() {
     return ok;
 }
 
+// The calls that bring a window forward, blocked at user32 itself for this
+// process's own windows: the game's and its drivers' imports are hooked
+// above, but dgVoodoo2's DLLs are packed (their calls can't be found), and on
+// a PC where the foreground lock timeout is 0 any of them takes the focus
+// from the player at once. Each must start with the hot-patch prologue.
+void* o_SetForegroundWindowApi;
+void* o_BringWindowToTopApi;
+void* o_SetActiveWindowApi;
+
+bool OwnWindow(HWND hwnd) {
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    return pid == GetCurrentProcessId();
+}
+BOOL WINAPI SetForegroundWindowApi(HWND hwnd) {
+    if (OwnWindow(hwnd)) return TRUE;
+    return reinterpret_cast<decltype(&SetForegroundWindow)>(o_SetForegroundWindowApi)(hwnd);
+}
+BOOL WINAPI BringWindowToTopApi(HWND hwnd) {
+    if (OwnWindow(hwnd)) return TRUE;
+    return reinterpret_cast<decltype(&BringWindowToTop)>(o_BringWindowToTopApi)(hwnd);
+}
+HWND WINAPI SetActiveWindowApi(HWND hwnd) {
+    if (OwnWindow(hwnd)) return g_hwnd;
+    return reinterpret_cast<decltype(&SetActiveWindow)>(o_SetActiveWindowApi)(hwnd);
+}
+
+bool BlockForegroundCalls() {
+    static const uint8_t hot[5] = {0x8b, 0xff, 0x55, 0x8b, 0xec};  // mov edi,edi; push ebp; mov ebp,esp
+    HMODULE user32 = GetModuleHandleA("user32.dll");
+    struct {
+        const char* name;
+        void* fn;
+        void** orig;
+    } apis[] = {{"SetForegroundWindow", (void*)&SetForegroundWindowApi, &o_SetForegroundWindowApi},
+                {"BringWindowToTop", (void*)&BringWindowToTopApi, &o_BringWindowToTopApi},
+                {"SetActiveWindow", (void*)&SetActiveWindowApi, &o_SetActiveWindowApi}};
+    bool ok = true;
+    for (auto& a : apis) {
+        uintptr_t at = (uintptr_t)GetProcAddress(user32, a.name);
+        *a.orig = at ? hook::Detour(at, hot, 5, a.fn) : nullptr;
+        if (!*a.orig) Log("headless: %s not blockable", a.name);
+        ok = ok && *a.orig;
+    }
+    return ok;
+}
+
 bool Install(bool visible) {
     g_active = true;
     g_visible = visible;
@@ -309,6 +356,8 @@ bool Install(bool visible) {
     if (mci) hook::Import(mci, &h_mciSendCommandA, &o_mciSendCommandA);
     Log("headless: exe hooks %s; music log %s", ok ? "ok" : "FAILED", mci ? "on" : "off");
     if (!o_GetForegroundWindow) o_GetForegroundWindow = &GetForegroundWindow;
+    bool blocked = BlockForegroundCalls();
+    Log("headless: foreground calls %s", blocked ? "blocked at user32" : "NOT all blocked (see above)");
     if (ok) {
         CloseHandle(CreateThread(nullptr, 0, &MuteThread, nullptr, 0, nullptr));
         CloseHandle(CreateThread(nullptr, 0, &Watchdog, nullptr, 0, nullptr));

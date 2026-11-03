@@ -132,7 +132,91 @@ int __cdecl Render3D(void* world, void* camera, void* pm, void* depth) {
     return r;
 }
 
+// Full-screen 640x480 pictures (menu backdrops, the Controls screen's, the
+// loading screen) are stretched to the buffer's width instead of sitting
+// between bars ([Display] Backdrops = stretch, the default; "bars" keeps the
+// original look). The stretched copy is made once per picture, linear across
+// for 16-bit pictures, and checked against the picture's pixels each time
+// (the game frees and reloads backdrops, and a new one can take the address).
+const auto kAllocate = (uintptr_t(__cdecl*)(int, int, int, void*, int))0x538d80;  // BrPixelmapAllocate
+bool g_stretchBackdrops;
+
+uint8_t* PmPixels(uintptr_t pm) { return *(uint8_t**)(pm + 0x08); }
+int PmRowBytes(uintptr_t pm) { return *(int16_t*)(pm + 0x28); }
+int PmType(uintptr_t pm) { return *(uint8_t*)(pm + 0x2c); }
+int PmWidth(uintptr_t pm) { return *(uint16_t*)(pm + 0x34); }
+int PmHeight(uintptr_t pm) { return *(uint16_t*)(pm + 0x36); }
+
+uint32_t Sample(uintptr_t pm) {  // a fingerprint of the picture: 97 pixels across it
+    const uint8_t* px = PmPixels(pm);
+    int rb = PmRowBytes(pm);
+    uint32_t h = 2166136261u;
+    for (int i = 0; i < 97; i++) {
+        uint32_t v = *(const uint16_t*)(px + (i * 37 % 480) * rb + (i * 151 % 640) * 2);
+        h = (h ^ v) * 16777619u;
+    }
+    return h;
+}
+
+struct Stretched {
+    uintptr_t pm;        // the W x 480 copy
+    uint8_t* srcPixels;  // the picture it was made from
+    uint32_t sample;
+};
+Stretched g_stretched[8];
+
+uintptr_t StretchedCopy(uintptr_t src) {
+    int type = PmType(src), bytes = PmRowBytes(src) / 640;
+    uint32_t sample = Sample(src);
+    for (Stretched& s : g_stretched)
+        if (s.pm && s.srcPixels == PmPixels(src) && s.sample == sample) return s.pm;
+    Stretched* slot = &g_stretched[0];
+    for (Stretched& s : g_stretched)
+        if (!s.pm) slot = &s;
+    if (!slot->pm) slot->pm = kAllocate(type, g_w, 480, nullptr, 0);  // reused: the old copy is overwritten
+    uintptr_t dst = slot->pm;
+    if (!dst || PmType(dst) != type || PmWidth(dst) != g_w || PmRowBytes(dst) < g_w * bytes) {
+        Log("frontend: no stretched backdrop (type %#x)", type);
+        return 0;
+    }
+    for (int y = 0; y < 480; y++) {
+        const uint8_t* in = PmPixels(src) + y * PmRowBytes(src);
+        uint8_t* out = PmPixels(dst) + y * PmRowBytes(dst);
+        for (int x = 0; x < g_w; x++) {
+            int fx = x * 639 * 256 / (g_w - 1);  // 8.8 source position
+            int i = fx >> 8, f = fx & 255, j = i < 639 ? i + 1 : i;
+            if (bytes == 2) {
+                uint32_t a = ((const uint16_t*)in)[i], b = ((const uint16_t*)in)[j];
+                bool rgb565 = type == 5 || type == 0x12, rgb555 = type == 4;
+                if (!rgb565 && !rgb555) {
+                    ((uint16_t*)out)[x] = (uint16_t)(f < 128 ? a : b);
+                    continue;
+                }
+                // Red, green and blue fields, blended separately.
+                uint32_t gmask = rgb565 ? 0x07e0 : 0x03e0, rmask = rgb565 ? 0xf800 : 0x7c00;
+                auto mix = [&](uint32_t m) { return ((((a & m) * (256 - f) + (b & m) * f) >> 8) & m); };
+                ((uint16_t*)out)[x] = (uint16_t)(mix(rmask) | mix(gmask) | mix(0x001f));
+            } else {
+                for (int k = 0; k < bytes; k++)
+                    out[x * bytes + k] = (uint8_t)((in[i * bytes + k] * (256 - f) + in[j * bytes + k] * f) >> 8);
+            }
+        }
+    }
+    slot->srcPixels = PmPixels(src);
+    slot->sample = sample;
+    const char* name = *(const char* const*)(src + 4);  // br_pixelmap identifier
+    Log("frontend: backdrop %s stretched to %dx480 (type %#x)", name && !IsBadReadPtr(name, 1) ? name : "?", g_w,
+        type);
+    return dst;
+}
+
 int __fastcall Copy2D(void* dst, int dx, int dy, void* src, int sx, int sy, int w, int h) {
+    uintptr_t s = (uintptr_t)src;
+    // (The callers load the size with 16-bit moves: only the low halves count.)
+    if (g_scope > 0 && g_stretchBackdrops && g_w > 640 && dx == 0 && dy == 0 && sx == 0 && sy == 0 &&
+        (w & 0xffff) == 640 && (h & 0xffff) == 480 && s && PmWidth(s) == 640 && PmHeight(s) == 480 && PmPixels(s))
+        if (uintptr_t wide = StretchedCopy(s))
+            return reinterpret_cast<Copy2D_t>(g_copy2D)(dst, 0, 0, (void*)wide, 0, 0, g_w, 480);
     if (g_scope > 0) dx += g_xo;
     return reinterpret_cast<Copy2D_t>(g_copy2D)(dst, dx, dy, src, sx, sy, w, h);
 }
@@ -200,6 +284,22 @@ void MapMouse(int* x, int* y) {
 void __fastcall GetMouse(int* x, int* y) {
     o_GetMouse(x, y);
     MapMouse(x, y);
+}
+
+// The game's GetMousePos (0x483c10) clamps to 0 .. the mode's width and
+// height, in buffer terms; menus use menu space (buffer - xo), where that let
+// the cursor into the right bar but not the left. Same logic, with the menu
+// bounds in menus: -xo .. W - xo.
+void __fastcall GetMousePos(int* x, int* y) {
+    GetMouse(x, y);  // 0x51c900, mapped
+    const int32_t* mode = (const int32_t*)0x662214 + *(const int32_t*)0x762324 * 13;  // graf spec: width, height
+    int lo = g_scope > 0 ? -g_xo : 0, hi = g_scope > 0 ? mode[0] - g_xo : mode[0];
+    if (*x < lo) *x = lo;
+    else if (*x > hi) *x = hi;
+    if (*y < 0) *y = 0;
+    else if (*y > mode[1]) *y = mode[1];
+    *(int32_t*)0x6571f8 = *x;  // the last position (GetMouseButton compares with it)
+    *(int32_t*)0x6571fc = *y;
 }
 
 // Test runs: the cursor, in client pixels of the emulated full-screen window.
@@ -485,6 +585,10 @@ void Install(int w) {
     o_GetMouse = (GetMouse_t)hook::Detour(0x51c900, getMouse, 5, (const void*)&GetMouse);
     o_GetDoubleClick = (GetDoubleClick_t)hook::Detour(0x51db00, getDouble, 7, (const void*)&GetDoubleClick);
     Check(o_GetMouse && o_GetDoubleClick, "mouse detours");
+    static const uint8_t getMousePos[6] = {0x56, 0x57, 0x8b, 0xfa, 0x8b, 0xf1};  // push esi; push edi; mov edi,edx; mov esi,ecx
+    Check(hook::Detour(0x483c10, getMousePos, 6, (const void*)&GetMousePos) != nullptr, "mouse bounds");
+    std::string backdrops = settings::Get("Display", "Backdrops", "stretch");
+    g_stretchBackdrops = _stricmp(backdrops.c_str(), "bars") != 0;
 
     Log("frontend: centred at +%d in %dx480 (%d failures)", g_xo, w, g_failures);
 }
