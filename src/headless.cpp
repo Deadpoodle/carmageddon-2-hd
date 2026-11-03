@@ -270,8 +270,10 @@ bool InstallScreen() {
               HookUser32(nullptr, "RegisterClassA", &h_RegisterClassA, &o_RegisterClassA) &&
               HookUser32(nullptr, "FindWindowA", &h_FindWindowA, &o_FindWindowA) &&
               HookUser32(nullptr, "MessageBoxA", &h_MessageBoxA, &o_MessageBoxA);
-    Log("headless (full screen): hooks %s", ok ? "ok" : "FAILED");
-    if (ok) CloseHandle(CreateThread(nullptr, 0, &MuteThread, nullptr, 0, nullptr));
+    char mute[4] = "";  // C2HD_MUTE=0: audible (for sound checks with the player there)
+    bool audible = GetEnvironmentVariableA("C2HD_MUTE", mute, sizeof mute) && mute[0] == '0';
+    Log("headless (full screen): hooks %s%s", ok ? "ok" : "FAILED", audible ? ", sound on" : "");
+    if (ok && !audible) CloseHandle(CreateThread(nullptr, 0, &MuteThread, nullptr, 0, nullptr));
     return ok;
 }
 

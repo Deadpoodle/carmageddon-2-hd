@@ -8,6 +8,7 @@
 #include <cstring>
 #include <string>
 
+#include "audio.h"
 #include "capture.h"
 #include "controller.h"
 #include "display.h"
@@ -209,6 +210,7 @@ void StartTests() {
         Log("test: game debug print to the log: %s", hook::Patch(0x44c590, stub, jmp, 5) ? "on" : "FAILED");
         quit::LogFocusMessages();
         LogHooks();
+        audio::InstallLog();
     }
     if (Env("C2HD_FLOWLOG") == "1") frontend::InstallFlowLog();
     if (Env("C2HD_TEST_EXIT") == "window") {
