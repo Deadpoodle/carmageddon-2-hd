@@ -65,6 +65,7 @@ volatile int g_givePowerup = -1;  // POWERUP=n: given on the game thread's next 
 volatile bool g_dumpMap;          // DUMPMAP: the race's map and minimap pixelmaps to shots\, likewise
 volatile int g_finish = -1;       // FINISH[=ms]: the race is completed (laps), likewise; see below
 volatile int g_clockBack;
+volatile bool g_allCars;          // ALLCARS: every car owned (and plenty of credits), likewise
 
 // A pixelmap to shots\<name>_N.raw: a 16-byte header (width, height, row
 // bytes, type) and the rows as they are in memory.
@@ -311,6 +312,23 @@ HRESULT WINAPI h_GetDeviceState(void* dev, DWORD size, void* data) {
             Log("script: race completed");
             ((void(__fastcall*)(int))0x5030b0)(0);
         }
+        if (g_allCars && *(int*)0x75bc08 > 0) {
+            // A test profile with every car: the owned list (opponent numbers,
+            // 0x75d620[60], count 0x75bc08) gets every opponent's car not already
+            // in it (count 0x74d1ac, from OPPONENT.TXT: 53), as the Wrecks gallery's
+            // BUY adds one (0x46e7bc); credits 0x75bb80 go up to 9,999,990.
+            g_allCars = false;
+            int* owned = (int*)0x75d620;
+            int& count = *(int*)0x75bc08;
+            int opponents = *(int*)0x74d1ac;
+            for (int car = 0; car < opponents && count < 60; car++) {
+                bool has = false;
+                for (int i = 0; i < count; i++) has |= owned[i] == car;
+                if (!has) owned[count++] = car;
+            }
+            if (*(int*)0x75bb80 < 9999990) *(int*)0x75bb80 = 9999990;
+            Log("script: every car owned (%d of %d opponents), credits %d", count, opponents, *(int*)0x75bb80);
+        }
         if (g_clockBack > 0 && *(volatile int*)0x68c784 == 3) {
             // FINISH=ms: once the time bonus counts up (state 3 of 0x68c784), the
             // game time (0x514c30) goes ms back, by raising the lost time
@@ -378,6 +396,7 @@ struct Step {
     const KeyName* sweepKey = nullptr;  // KEYSWEEP[=key]: press it round the screen (default DOWN)
     std::string goTo;     // GOTO=name: press Down until that item has the focus
     int finish = -1;      // FINISH[=ms]: complete the race (and set the game time ms back during the time bonus)
+    bool allCars = false; // ALLCARS: own every car, with plenty of credits (a test profile)
     DWORD wait = 0;       // WAIT=s: pause (later steps' times count from the start, so a
                           // tour with long steps can use small times and WAITs)
     int powerup = -1;     // POWERUP=n: give the player power-up n (in a race)
@@ -409,6 +428,8 @@ DWORD WINAPI ScriptThread(void*) {
                 g_dumpMap = true;
             } else if (s.finish >= 0) {
                 g_finish = s.finish;
+            } else if (s.allCars) {
+                g_allCars = true;
             } else if (s.sweepKey) {
                 frontend::KeySweep(&Press, s.sweepKey->dik, s.sweepKey->name);
             } else if (!s.goTo.empty()) {
@@ -530,6 +551,7 @@ void StartScript(const char* script) {
             else if (name.rfind("POWERUP=", 0) == 0) st.powerup = atoi(name.c_str() + 8);
             else if (name == "DUMPMAP") st.dumpMap = true;
             else if (name == "FINISH") st.finish = 0;
+            else if (name == "ALLCARS") st.allCars = true;
             else if (name.rfind("FINISH=", 0) == 0) st.finish = atoi(name.c_str() + 7);
             else if (name.rfind("PAD=", 0) == 0) {
                 static const struct {

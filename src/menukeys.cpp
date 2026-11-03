@@ -67,7 +67,8 @@ uint8_t* const* const kCurrent = (uint8_t* const*)0x688abc;  // the current scre
 
 // The update's next Return check answers "pressed". Volatile: it is only read
 // by ReturnPressed, which the update reaches through a patched call GCC can't
-// see, so without it GCC drops the stores around the update call as dead.
+// see. (The Load Game flake once blamed on that was GCC's indirect inlining:
+// see build.sh.)
 volatile bool g_activate;
 
 int __fastcall ReturnPressed(int code) { return g_activate || kKeyPressed(code); }
