@@ -113,6 +113,8 @@ The game keeps four key sets, **A** to **D**, on its Controls screen (Options â†
 
 **Remapping:** on the Controls screen, pick the set, click an action, then press the new key. The game saves each set in its own file (`data\KEYMAP_4.TXT` for E). The game's rules apply: a key already used by another action leaves that action unset, and OK won't close the screen until it has a key again. With set E, the arrow keys keep driving whatever you've moved the driving actions to. Your driving keys also move around the menus; Return selects and Esc goes back.
 
+**Debug overlay:** F2 in a race shows a few lines of numbers above the minimap: frame rate and frame time, race time, the car's position and speed (world units, per second), the camera's position, where the minimap is cutting from the track map, active pedestrians and physics bodies, and the patch version. F2 again hides it; the choice is kept (`[Debug] Overlay`). It's there for tracking down problems: a screenshot with it on says a lot.
+
 **Extra keys** for any action go in `[Keys]` in `Carma2HD.ini`, with any set. For example, `Handbrake=SPACE,LSHIFT`. Key names are DirectInput names: `W`, `UP`, `SPACE`, `LSHIFT`, `LCONTROL`, `RETURN`, `NUMPAD8`, `F1` and so on. The full list of actions is in the ini file.
 
 **Controller** (any XInput pad, e.g. an Xbox controller):

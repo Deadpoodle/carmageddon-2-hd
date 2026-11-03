@@ -11,6 +11,7 @@
 #include "audio.h"
 #include "capture.h"
 #include "controller.h"
+#include "debug.h"
 #include "display.h"
 #include "frontend.h"
 #include "hdtab.h"
@@ -467,6 +468,7 @@ void Start() {
     icons::Install();
     wrecks::Install();
     peds::Install();
+    debug::Install();
     music::Install();
     StartTests();
     if (netshim::Install()) netmenu::Install();  // after the test harness: tests stay on loopback

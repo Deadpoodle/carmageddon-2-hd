@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "controller.h"
+#include "debug.h"
 #include "keysets.h"
 #include "frontend.h"
 #include "headless.h"
@@ -304,6 +305,7 @@ HRESULT WINAPI h_GetDeviceState(void* dev, DWORD size, void* data) {
     }
     if (SUCCEEDED(hr)) {
         MapLog((const BYTE*)data);
+        debug::OnKeys((const BYTE*)data);
         Translate((BYTE*)data);
         controller::InjectKeys((BYTE*)data, &TargetScan);
     }

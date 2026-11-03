@@ -1,4 +1,4 @@
 #pragma once
 // Carmageddon II HD's version (semantic versioning; CHANGELOG.md lists each).
 
-#define C2HD_VERSION "0.15.0"
+#define C2HD_VERSION "0.16.0"
