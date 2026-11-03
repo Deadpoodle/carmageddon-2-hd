@@ -1,8 +1,9 @@
 #!/bin/sh
 # The release zip, release/carma2hd.zip, built from the committed tree (HEAD),
-# never from uncommitted work, in a carma2hd folder: dinput.dll, dgVoodoo.conf, the Steam Deck
-# installer and the docs. dgVoodoo2's own DLLs are not included: the installer
-# (and the README for Windows) fetches them from dgVoodoo2's releases.
+# never from uncommitted work. In a carma2hd folder: dinput.dll,
+# dgVoodoo.conf, the Steam Deck installer and the docs. dgVoodoo2's own DLLs
+# are not included: the installer (and the README for Windows) fetches them
+# from dgVoodoo2's releases.
 set -e
 cd "$(dirname "$0")/.."
 version=$(sed -n 's/^#define C2HD_VERSION "\(.*\)"/\1/p' src/version.h)
