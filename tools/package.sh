@@ -1,6 +1,6 @@
 #!/bin/sh
 # The release zip, release/carma2hd.zip, built from the committed tree (HEAD),
-# never from uncommitted work: dinput.dll, dgVoodoo.conf, the Steam Deck
+# never from uncommitted work, in a carma2hd folder: dinput.dll, dgVoodoo.conf, the Steam Deck
 # installer and the docs. dgVoodoo2's own DLLs are not included: the installer
 # (and the README for Windows) fetches them from dgVoodoo2's releases.
 set -e
@@ -17,7 +17,7 @@ rm -f release/carma2hd.zip
 python -c 'import os, sys, zipfile
 z = zipfile.ZipFile(sys.argv[1], "w", zipfile.ZIP_DEFLATED)
 for name in sorted(os.listdir(sys.argv[2])):
-    info = zipfile.ZipInfo(name)
+    info = zipfile.ZipInfo("carma2hd/" + name)
     info.external_attr = (0o755 if name.endswith(".sh") else 0o644) << 16
     with open(os.path.join(sys.argv[2], name), "rb") as f:
         z.writestr(info, f.read(), zipfile.ZIP_DEFLATED)' release/carma2hd.zip "$tree/zip"
