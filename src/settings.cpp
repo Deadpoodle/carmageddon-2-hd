@@ -42,6 +42,8 @@ const char* kDefaultIni =
     "FrameRate=auto\r\n"
     "; Cutscenes: enhanced (enlarged 4x with Lanczos and lightly sharpened) or original\r\n"
     "Movies=enhanced\r\n"
+    "; fill = cutscenes as large as the screen allows (1.25x at 16:9), original = 640x384 as the game had\r\n"
+    "MovieSize=fill\r\n"
     "; Text and HUD art: on (their textures enlarged 2x with Scale2x, so they stay crisp at high resolutions) or off\r\n"
     "SharpText=on\r\n"
     "\r\n"

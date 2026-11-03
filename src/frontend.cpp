@@ -35,10 +35,11 @@ volatile LONG g_capture;  // > 0 while the Controls screen waits for a key
 namespace {
 
 uintptr_t* const kBackScreen = (uintptr_t*)0x74d360;  // br_pixelmap* gBack_screen
-constexpr int kOriginX = 0x38;                        // br_pixelmap origin_x (int16)
+constexpr int kOriginX = 0x38, kOriginY = 0x3a;      // br_pixelmap origin_x, origin_y (int16)
 HWND* const kWindow = (HWND*)0x6ad4c8;
 
 int16_t& BackOriginX() { return *(int16_t*)(*kBackScreen + kOriginX); }
+int16_t& BackOriginY() { return *(int16_t*)(*kBackScreen + kOriginY); }
 
 }  // namespace
 }  // namespace frontend
@@ -123,12 +124,33 @@ Site3D g_sites3D[5] = {{0x522f55, 0}, {0x46575e, 0}, {0x470988, 0}, {0x4651dc, 0
 uintptr_t g_copy2D = 0x5191b0;
 uintptr_t g_allocateSub = 0x537d60;
 
+// Movies (site 4, PlaySmackerFile 0x43ef64: 640x384 of tiles under the 2D
+// camera) are enlarged to fill the screen's height, or its width if that is
+// narrower ([Visuals] MovieSize = fill, the default; "original" leaves them):
+// the camera's view (br_camera +0x14 width, +0x18 height) is narrowed by that
+// factor for the movie's draw only. 1.25 at 16:9: 640x384 becomes 800x480.
+// The 2D camera's view starts at the menu's top-left, so the picture grows
+// from there; the back screen's origin moves it back by half the growth of
+// the 640x480 frame (80 left, 60 up at 1.25), centring it.
+float g_movieZoom = 1;
+
 template <int I>
 int __cdecl Render3D(void* world, void* camera, void* pm, void* depth) {
     bool shift = g_scope > 0 && (uintptr_t)pm == *kBackScreen;
-    if (shift) BackOriginX() += (int16_t)g_xo;
+    float* view = nullptr;
+    float saved[2] = {0, 0};
+    int16_t dx = shift ? (int16_t)g_xo : 0, dy = 0;
+    if (I == 4 && g_movieZoom > 1 && camera && shift) {
+        view = (float*)(*(uint8_t**)((uint8_t*)camera + 0x5c) + 0x14);
+        saved[0] = view[0], saved[1] = view[1];
+        view[0] /= g_movieZoom, view[1] /= g_movieZoom;
+        dx -= (int16_t)(320 * (g_movieZoom - 1) + 0.5f);
+        dy -= (int16_t)(240 * (g_movieZoom - 1) + 0.5f);
+    }
+    if (shift) BackOriginX() += dx, BackOriginY() += dy;
     int r = reinterpret_cast<Render3D_t>(g_sites3D[I].target)(world, camera, pm, depth);
-    if (shift) BackOriginX() -= (int16_t)g_xo;
+    if (shift) BackOriginX() -= dx, BackOriginY() -= dy;
+    if (view) view[0] = saved[0], view[1] = saved[1];
     return r;
 }
 
@@ -589,6 +611,8 @@ void Install(int w) {
     Check(hook::Detour(0x483c10, getMousePos, 6, (const void*)&GetMousePos) != nullptr, "mouse bounds");
     std::string backdrops = settings::Get("Display", "Backdrops", "stretch");
     g_stretchBackdrops = _stricmp(backdrops.c_str(), "bars") != 0;
+    if (_stricmp(settings::Get("Visuals", "MovieSize", "fill").c_str(), "original") != 0)
+        g_movieZoom = 480.0f / 384 < w / 640.0f ? 480.0f / 384 : w / 640.0f;
 
     Log("frontend: centred at +%d in %dx480 (%d failures)", g_xo, w, g_failures);
 }

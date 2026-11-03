@@ -147,8 +147,10 @@ void Upscale(int k, bool rgb555) {
             d[0] = r, d[1] = g, d[2] = b;
         }
     // Vertical pass, straight into the packed 16-bit image. 0x0000 is the
-    // driver's colour key, so black becomes the darkest non-zero value, as the
-    // game does for its own palette.
+    // driver's colour key (the game turns its palette's black into 0x040404
+    // for that, before we see the palette, which packs to a faint green band);
+    // here anything under one 16-bit step is 0: transparent, over the screen
+    // the driver clears to black.
     g_packed.resize(W * H);
     for (int y = 0; y < H; y++) {
         const float* rows[4];
@@ -163,7 +165,7 @@ void Upscale(int k, bool rgb555) {
             }
             uint16_t p = rgb555 ? (uint16_t)(((px[0] >> 3) << 10) | ((px[1] >> 3) << 5) | (px[2] >> 3))
                                 : (uint16_t)(((px[0] >> 3) << 11) | ((px[1] >> 2) << 5) | (px[2] >> 3));
-            g_packed[y * W + x] = p ? p : (rgb555 ? 0x0001 : 0x0020);
+            g_packed[y * W + x] = px[0] < 8 && px[1] < 8 && px[2] < 8 ? 0 : p;
         }
     }
 }

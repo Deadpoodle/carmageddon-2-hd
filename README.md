@@ -28,7 +28,7 @@ It is a binary patch: a small `dinput.dll` that the game loads at start-up and t
 **Visuals**
 - Anti-aliasing (2x, 4x or 8x), 16x anisotropic texture filtering with mipmaps, and full-precision colour instead of 16-bit dithering.
 - A frame cap at your screen's refresh rate, never above 100 fps. Above 100 the game's physics run fast.
-- Cutscenes enlarged 4x with deband, light sharpening and Lanczos scaling.
+- Cutscenes enlarged 4x with deband, light sharpening and Lanczos scaling, and shown as large as the screen allows (800x480 of a 16:9 frame instead of 640x384), on true black.
 - Sharper text and HUD art: their textures are enlarged 2x with Scale2x.
 - The CD music plays: a store compatibility shim had stopped it.
 
@@ -79,7 +79,7 @@ Change these on the **HD** tab (Options → Settings → HD) or in `Carma2HD.ini
 These are only in `Carma2HD.ini`:
 - `[Display]`: `Fullscreen`. `borderless` (the default) is a screen-size window: no display mode change, and Windows can draw over it. `exclusive` gives the screen to the game alone.
 - `[Display]`: `Backdrops`. `stretch` (the default) stretches the menu and loading pictures to the full width. `bars` keeps the original 4:3 pictures between black bars.
-- `[Visuals]`: `Movies` (enhanced or original) and `SharpText` (on or off).
+- `[Visuals]`: `Movies` (enhanced or original), `MovieSize` (fill, the default, or original) and `SharpText` (on or off).
 - `[Network]`: see [Network play](#network-play).
 - `[Controller]`: `Enabled` (1 or 0).
 
