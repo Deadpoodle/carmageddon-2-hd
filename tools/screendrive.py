@@ -23,7 +23,7 @@ Steps, one per line ("#" comments):
   click                    left click
   key <name> [ms]          press a key (RETURN, ESCAPE, F4, UP ... or a letter or digit)
   altf4                    Alt+F4
-  alttab                   Alt+Tab away from the game (no input is sent until "front" again;
+  alttab [s]               Alt+Tab away from the game (Alt held s seconds after Tab) (no input is sent until "front" again;
                            no screenshot is taken of whatever is then in front). Windows'
                            task switcher ignores a synthesized Alt+Tab over the full-screen game,
                            so this only logs whether it switched; "away" switches for real
@@ -142,7 +142,8 @@ def front():
         user32.SetForegroundWindow(h)
         time.sleep(0.5)
         if game_in_front():
-            log("game window in front")
+            log(f"game window in front (style {user32.GetWindowLongW(h, -16) & 0xffffffff:#010x}, "
+                f"ex style {user32.GetWindowLongW(h, -20) & 0xffffffff:#010x})")
             return
     log("could not bring the game window to the front")
     proc.terminate()
@@ -255,8 +256,8 @@ for raw in open(steps_file):
             continue
         key(vk, int(a[1]) if len(a) > 1 else 120)
         log(f"key {a[0]}")
-    elif op == "alttab":
-        key(VK["TAB"], 80, alt=True)
+    elif op == "alttab":  # alttab [s]: Alt held that long after Tab (default 0.08)
+        key(VK["TAB"], int(float(a[0]) * 1000) if a else 80, alt=True)
         time.sleep(1)
         log(f"Alt+Tab: game {'still' if game_in_front() else 'no longer'} in front")
     elif op == "away":

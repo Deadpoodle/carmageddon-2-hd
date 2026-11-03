@@ -15,10 +15,10 @@ bool Install();
 // from the Network screen. Takes effect within the game's next search.
 void SetJoinAddress(const std::string& text);
 
-// Where joining by address stands: no address; resolving it; not an address
-// (or the name didn't resolve); searching it; the host there has answered
-// (its IPX node in `host`).
-enum JoinState { kJoinNone, kJoinResolving, kJoinBadAddress, kJoinLooking, kJoinAnswered };
+// Where joining by address stands: no address; looking the name up; not a
+// valid address (malformed: no lookup is made); the name wasn't found;
+// searching the address; the host there has answered (its IPX node in `host`).
+enum JoinState { kJoinNone, kJoinResolving, kJoinInvalid, kJoinNotFound, kJoinLooking, kJoinAnswered };
 JoinState GetJoinState(uint8_t host[6]);
 
 }  // namespace netshim

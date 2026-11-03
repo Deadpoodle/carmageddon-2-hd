@@ -10,4 +10,7 @@ void Install();
 // The main thread's EIP and the code addresses on its stack, to the log.
 void LogMainThread();
 
+// Diagnostic: log the focus-related messages the game's window gets.
+void LogFocusMessages();
+
 }  // namespace quit

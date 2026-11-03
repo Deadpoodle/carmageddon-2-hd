@@ -118,7 +118,14 @@ void ShutdownDrain() {
         }
 }
 
+bool g_logFocus;  // diagnostic: focus-related messages to the log
+
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    if (g_logFocus && (msg == WM_ACTIVATEAPP || msg == WM_ACTIVATE || msg == WM_SYSCOMMAND || msg == WM_SYSKEYDOWN ||
+                       msg == WM_SYSKEYUP || msg == WM_SIZE || msg == WM_KILLFOCUS || msg == WM_SETFOCUS ||
+                       msg == WM_WINDOWPOSCHANGED))
+        Log("window: msg %#x wp %#lx lp %#lx (foreground %p, iconic %d)", msg, (unsigned long)wp, (unsigned long)lp,
+            (void*)GetForegroundWindow(), IsIconic(hwnd));
     const char* why = nullptr;
     if (msg == WM_SYSKEYDOWN && wp == VK_F4 && (lp & (1 << 29))) why = "Alt+F4";
     else if (msg == WM_CLOSE) why = "WM_CLOSE";
@@ -132,6 +139,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 }
 
 }  // namespace
+
+void LogFocusMessages() { g_logFocus = true; }
 
 void Install() {
     g_mainThread = OpenThread(THREAD_GET_CONTEXT | THREAD_SUSPEND_RESUME, FALSE, GetCurrentThreadId());

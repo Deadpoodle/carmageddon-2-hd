@@ -97,21 +97,52 @@ struct JoinRequest {
     int generation;
 };
 
+// "host[:port]": host is a dotted IPv4 address (four numbers 0-255) or a name;
+// port 1-65535. False when it can't be either (checked before any lookup).
+bool ParseJoin(const std::string& text, std::string* host, int* port) {
+    size_t colon = text.find(':');
+    *host = text.substr(0, colon);
+    *port = g_basePort;
+    if (host->empty() || host->size() > 127) return false;
+    if (colon != std::string::npos) {
+        std::string p = text.substr(colon + 1);
+        if (p.empty() || p.size() > 5 || p.find_first_not_of("0123456789") != std::string::npos) return false;
+        *port = atoi(p.c_str());
+        if (*port < 1 || *port > 65535) return false;
+    }
+    if (host->find_first_not_of("0123456789.") != std::string::npos) return true;  // a name
+    int parts = 0, value = -1;
+    for (char c : *host + ".") {
+        if (c == '.') {
+            if (value < 0 || value > 255) return false;
+            parts++, value = -1;
+        } else {
+            value = (value < 0 ? 0 : value * 10) + (c - '0');
+            if (value > 999) return false;
+        }
+    }
+    return parts == 4;
+}
+
 DWORD WINAPI ResolveJoin(void* p) {
     JoinRequest* req = (JoinRequest*)p;
-    char host[128] = "";
-    int port = g_basePort;
-    sscanf(req->text.c_str(), "%127[^:]:%d", host, &port);
-    unsigned long ip = inet_addr(host);
-    if (ip == INADDR_NONE)
-        if (hostent* he = gethostbyname(host)) memcpy(&ip, he->h_addr_list[0], 4);
-    bool ok = ip != INADDR_NONE && ip && port > 0 && port < 65536;
+    std::string host;
+    int port;
+    JoinState state = kJoinInvalid;
+    unsigned long ip = INADDR_NONE;
+    if (ParseJoin(req->text, &host, &port)) {
+        ip = inet_addr(host.c_str());
+        if (ip == INADDR_NONE)
+            if (hostent* he = gethostbyname(host.c_str())) memcpy(&ip, he->h_addr_list[0], 4);
+        state = ip != INADDR_NONE && ip ? kJoinLooking : kJoinNotFound;
+    }
     if (req->generation == g_joinGeneration) {  // not replaced while we looked it up
-        g_join = ok ? ip | (uint64_t)htons((u_short)port) << 32 : 0;
-        g_joinState = ok ? kJoinLooking : kJoinBadAddress;
+        g_join = state == kJoinLooking ? ip | (uint64_t)htons((u_short)port) << 32 : 0;
+        g_joinState = state;
         in_addr a;
         a.s_addr = ip;
-        Log("net: join address %s -> %s:%d", req->text.c_str(), ok ? inet_ntoa(a) : "not resolved", port);
+        Log("net: join address %s -> %s", req->text.c_str(),
+            state == kJoinLooking ? inet_ntoa(a) : state == kJoinInvalid ? "not a valid address" : "not found");
     }
     delete req;
     return 0;

@@ -76,6 +76,7 @@ Change these on the **HD** tab (Options → Settings → HD) or in `Carma2HD.ini
 | Frame rate | 60, **auto** | Auto is your screen's refresh rate, capped at 100. |
 
 These are only in `Carma2HD.ini`:
+- `[Display]`: `Fullscreen`. `borderless` (the default) is a screen-size window: no display mode change, and Windows can draw over it. `exclusive` gives the screen to the game alone.
 - `[Visuals]`: `Movies` (enhanced or original) and `SharpText` (on or off).
 - `[Network]`: see [Network play](#network-play).
 - `[Controller]`: `Enabled` (1 or 0).
@@ -155,10 +156,12 @@ To host **over the internet**, three extra things are needed:
 
    | Message | Meaning |
    |---|---|
-   | SEARCHING... | Asking that address for a game. It asks again every 3 seconds. |
+   | NOT A VALID ADDRESS | It isn't an IP address (four numbers from 0 to 255 with dots between them), a name, or a port from 1 to 65535. Nothing is sent. |
+   | LOOKING UP THE ADDRESS... | You typed a name; it's being looked up. |
+   | ADDRESS NOT FOUND | The name couldn't be looked up. Check it. |
+   | SEARCHING... 15 | Asking that address for a game, every 3 seconds. The number counts down the 15 seconds the search is shown for. |
    | FOUND: PRESS JOIN | The host answered. Its game is selected in the list with its details shown, and **JOIN** is ready: press Return or click JOIN. |
-   | NO GAME FOUND YET, TRYING | Nothing has answered for 10 seconds. It keeps trying. See below. |
-   | ADDRESS NOT FOUND | That isn't an address, or the name couldn't be looked up. Check it. |
+   | NO GAME FOUND THERE | Nothing answered in 15 seconds. See below. It keeps listening while you stay on this screen, so a game that's hosted later still shows up; to count down again, click the box and press Return. |
    | THAT GAME CANNOT BE JOINED | The host answered, but its game has already started or is full. |
 
 **JOIN stays greyed out until the game list has a game in it.** That's the original game's rule. If it stays grey:

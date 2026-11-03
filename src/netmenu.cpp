@@ -14,7 +14,10 @@
 //
 // The game draws no cursor in a field being edited (nor for the driver name),
 // so ours blinks one after the text; and the status line says what is
-// happening: type, searching, not found, found. The screen's update is
+// happening: type; not a valid address; looking the name up; not found;
+// searching, counting down kSearchSeconds (the network layer asks the address
+// every 3 s, as the game's own search does); no game found there (it keeps
+// listening while the screen is open); found. The screen's update is
 // wrapped for that. When the host at the address answers and its game is
 // listed, the game's own row click (GameList_Click 0x4682c0) selects it, which
 // fills in its details, and the focus goes to JOIN.
@@ -84,6 +87,7 @@ int32_t& Field(int off) { return *(int32_t*)(kScreen + off); }
 // panel's 196 pixels at 26 letters or fewer.
 constexpr int kLeft = 414, kRight = 610, kY = 428, kFieldH = 16;
 constexpr int kStatusY = kY + 19, kStatusFont = 11;
+constexpr int kSearchSeconds = 15;  // the countdown shown while searching (5 of the game's 3 s searches)
 
 char g_edit[kMaxLength + 2];  // the text being typed (the field shows it with the cursor)
 std::string g_address;        // the address in use
@@ -241,18 +245,24 @@ void Tick() {
         return;
     }
     uint8_t host[6];
+    int left = kSearchSeconds - (int)((GetTickCount() - g_since) / 1000);
+    char searching[32];
+    snprintf(searching, sizeof searching, "SEARCHING... %d", left);
     switch (netshim::GetJoinState(host)) {
     case netshim::kJoinNone:
         SetStatus("");
         break;
     case netshim::kJoinResolving:
-        SetStatus("SEARCHING...");
+        SetStatus("LOOKING UP THE ADDRESS...");
         break;
-    case netshim::kJoinBadAddress:
+    case netshim::kJoinInvalid:
+        SetStatus("NOT A VALID ADDRESS");
+        break;
+    case netshim::kJoinNotFound:
         SetStatus("ADDRESS NOT FOUND");
         break;
     case netshim::kJoinLooking:
-        SetStatus(GetTickCount() - g_since > 10000 ? "NO GAME FOUND YET, TRYING" : "SEARCHING...");
+        SetStatus(left > 0 ? searching : "NO GAME FOUND THERE");
         break;
     case netshim::kJoinAnswered:
         if (!g_picked) SetStatus(PickHostGame(host));

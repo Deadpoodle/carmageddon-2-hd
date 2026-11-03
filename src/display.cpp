@@ -86,14 +86,24 @@ std::vector<dgvconf::Key> VisualKeys() {
             {"DirectX", "ForceVerticalSync", vsync ? "true" : "false"}};
 }
 
-// The visuals and the mouse. The mouse is mapped from the window's own pixels
-// (frontend.cpp), so dgVoodoo2 must leave the physical cursor free in the
-// window: by default it keeps it inside the game's resolution (854x480 of a
-// 2560x1440 screen, the top-left third). CaptureMouse (on by default) still
-// keeps it in the window.
+// The visuals, the mouse and the kind of full screen. The mouse is mapped from
+// the window's own pixels (frontend.cpp), so dgVoodoo2 must leave the
+// physical cursor free in the window: by default it keeps it inside the game's
+// resolution (854x480 of a 2560x1440 screen, the top-left third).
+// CaptureMouse (on by default) still keeps it in the window. Full screen is a
+// screen-size borderless window ("fake") unless [Display] Fullscreen says
+// exclusive: over an exclusive full screen Windows can't show its Alt+Tab
+// switcher (it switches, unseen, when Alt is let go).
 std::vector<dgvconf::Key> With(std::vector<dgvconf::Key> keys) {
     for (auto& k : VisualKeys()) keys.push_back(k);
     keys.push_back({"GeneralExt", "FreeMouse", "true"});
+    // Hidden and windowed tests (C2HD_HEADLESS=1/2; this runs before the test
+    // harness starts) never want dgVoodoo2's screen-size window.
+    char test[4] = "";
+    GetEnvironmentVariableA("C2HD_HEADLESS", test, sizeof test);
+    bool windowedTest = test[0] == '1' || test[0] == '2';
+    bool exclusive = Lower(settings::Get("Display", "Fullscreen", "borderless")) == "exclusive" || windowedTest;
+    keys.push_back({"GeneralExt", "FullscreenAttributes", exclusive ? "" : "fake"});
     return keys;
 }
 

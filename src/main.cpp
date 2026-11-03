@@ -127,8 +127,29 @@ LONG CALLBACK CrashLogger(EXCEPTION_POINTERS* ep) {
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
+// C2HD_GAMELOG=1 (diagnostic): the game's own debug print, compiled out to a
+// bare ret at 0x44c590 (printf-style, cdecl), goes to our log.
+void __cdecl GameDebugPrint(const char* fmt, ...) {
+    char line[512];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(line, sizeof line, fmt, ap);
+    va_end(ap);
+    size_t n = strlen(line);
+    while (n && (line[n - 1] == 10 || line[n - 1] == 13)) line[--n] = 0;  // trailing newlines
+    Log("game: %s", line);
+}
+
 void StartTests() {
     AddVectoredExceptionHandler(0, &CrashLogger);
+    if (Env("C2HD_GAMELOG") == "1") {
+        uint8_t jmp[5] = {0xe9};
+        int32_t rel = (int32_t)((uintptr_t)&GameDebugPrint - (0x44c590 + 5));
+        memcpy(jmp + 1, &rel, 4);
+        static const uint8_t stub[5] = {0xc3, 0x90, 0x90, 0x90, 0x90};  // ret, then padding
+        Log("test: game debug print to the log: %s", hook::Patch(0x44c590, stub, jmp, 5) ? "on" : "FAILED");
+        quit::LogFocusMessages();
+    }
     if (Env("C2HD_FLOWLOG") == "1") frontend::InstallFlowLog();
     if (Env("C2HD_TEST_EXIT") == "window") {
         bool ok = hook::Import(hook::FindImport(nullptr, "USER32.dll", "CreateWindowExA"), &ExitAtCreateWindow,
