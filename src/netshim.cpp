@@ -11,6 +11,15 @@
 // to [Network] JoinAddress); unicasts go to the UDP address last seen for
 // that node. Each copy picks its own random node number.
 //
+// In a race every player sends to every other player (a mesh), but over the
+// internet joiners usually can't reach each other, only the host they joined.
+// So the host's copy relays: a joiner sends a packet for a node it hasn't
+// heard from to the join address marked kRelay; the host passes a kRelay
+// packet for another node it knows on to that node, unmarked (so nothing is
+// relayed twice), and the receiver then knows the sender's node by the host's
+// address and replies through it the same way. A direct packet from a peer
+// (LAN, same PC) replaces the route, so LAN play stays direct.
+//
 // Test runs bind to 127.0.0.1 and "broadcast" to the loopback ports only, so
 // nothing listens on the network (and no firewall prompt appears).
 #include "netshim.h"
@@ -34,6 +43,7 @@ namespace {
 
 constexpr int kAfIpx = 6;
 constexpr uint32_t kMagic = 0x32484332;  // "2CH2"
+constexpr uint32_t kRelay = 0x52484332;  // "2CHR": the receiver is to pass it on to dstNode
 constexpr int kPorts = 8;
 
 #pragma pack(push, 1)
@@ -79,6 +89,24 @@ std::string g_joinText;  // resolved at the first bind (winsock is started by th
 uint8_t g_node[6];
 std::map<SOCKET, uint16_t> g_ipxSockets;  // our UDP socket -> its IPX socket number (net order)
 std::map<uint64_t, sockaddr_in> g_peers;  // IPX node -> last UDP address
+std::atomic<int> g_relayed, g_viaHost, g_fromHost;  // passed on as the host / sent, received through the host
+DWORD g_relayLogAt;
+std::map<uint64_t, int> g_received;  // packets from each node (for the traffic summary)
+
+void LogRelay() {
+    DWORD now = GetTickCount();
+    if (now - g_relayLogAt < 10000) return;
+    g_relayLogAt = now;
+    char peers[256] = "";
+    size_t n = 0;
+    for (const auto& r : g_received) {
+        const uint8_t* b = (const uint8_t*)&r.first;
+        n += snprintf(peers + n, sizeof peers - n, " %02x%02x:%d", b[4], b[5], r.second);
+        if (n >= sizeof peers - 16) break;
+    }
+    Log("net: traffic: received%s; relay: %d passed on, %d sent and %d received through the host", peers,
+        g_relayed.load(), g_viaHost.load(), g_fromHost.load());
+}
 
 uint64_t NodeKey(const uint8_t* n) {
     uint64_t k = 0;
@@ -90,6 +118,10 @@ bool IsBroadcast(const char* node) {
     for (int i = 0; i < 6; i++)
         if ((uint8_t)node[i] != 0xff) return false;
     return true;
+}
+
+bool SameAddress(const sockaddr_in& a, uint64_t join) {
+    return a.sin_addr.s_addr == (uint32_t)join && a.sin_port == (u_short)(join >> 32);
 }
 
 struct JoinRequest {
@@ -233,13 +265,20 @@ int WINAPI h_sendto(SOCKET s, const char* buf, int len, int flags, const sockadd
     memcpy(packet + sizeof(Header), buf, len);
     int size = (int)sizeof(Header) + len;
 
-    auto peer = g_peers.find(NodeKey((const uint8_t*)dst->node));
+    uint64_t dstKey = NodeKey((const uint8_t*)dst->node);
+    uint64_t join = g_join;
+    auto peer = g_peers.find(dstKey);
     if (!IsBroadcast(dst->node) && peer != g_peers.end()) {
+        // A peer known only by the host's address is reached through the host.
+        if (join && SameAddress(peer->second, join) && dstKey != g_joinHost) {
+            h->magic = kRelay;
+            g_viaHost++;
+        }
         if (SendUdp(s, packet, size, peer->second) == SOCKET_ERROR) return SOCKET_ERROR;
         return len;
     }
     // Broadcast (or a node we haven't heard from): every port of the range,
-    // and the configured host for join by IP.
+    // and the configured host for join by IP (to pass on, for a node).
     sockaddr_in a = {};
     a.sin_family = AF_INET;
     a.sin_addr.s_addr = htonl(g_loopback ? INADDR_LOOPBACK : INADDR_BROADCAST);
@@ -247,9 +286,13 @@ int WINAPI h_sendto(SOCKET s, const char* buf, int len, int flags, const sockadd
         a.sin_port = htons((u_short)(g_basePort + i));
         SendUdp(s, packet, size, a);
     }
-    if (uint64_t join = g_join) {
+    if (join) {
         a.sin_addr.s_addr = (uint32_t)join;
         a.sin_port = (u_short)(join >> 32);
+        if (!IsBroadcast(dst->node)) {
+            h->magic = kRelay;
+            g_viaHost++;
+        }
         SendUdp(s, packet, size, a);
     }
     return len;
@@ -268,15 +311,34 @@ int WINAPI h_recvfrom(SOCKET s, char* buf, int len, int flags, sockaddr* from, i
             return SOCKET_ERROR;                                 // WSAEWOULDBLOCK when nothing waits
         }
         if (n < (int)sizeof(Header)) continue;
-        const Header* h = (const Header*)packet;
-        if (h->magic != kMagic || memcmp(h->srcNode, g_node, 6) == 0) continue;  // not ours, or our own echo
-        if (!IsBroadcast((const char*)h->dstNode) && memcmp(h->dstNode, g_node, 6) != 0) continue;
+        Header* h = (Header*)packet;
+        if ((h->magic != kMagic && h->magic != kRelay) || memcmp(h->srcNode, g_node, 6) == 0) continue;
         uint64_t key = NodeKey(h->srcNode);
-        if (!g_peers.count(key))
-            Log("net: peer %02x%02x%02x%02x%02x%02x at %s:%u", h->srcNode[0], h->srcNode[1], h->srcNode[2],
-                h->srcNode[3], h->srcNode[4], h->srcNode[5], inet_ntoa(src.sin_addr), ntohs(src.sin_port));
-        g_peers[key] = src;
+        if (!IsBroadcast((const char*)h->dstNode) && memcmp(h->dstNode, g_node, 6) != 0) {
+            // For another node: pass it on if asked to and we know where it is.
+            auto to = g_peers.find(NodeKey(h->dstNode));
+            if (h->magic == kRelay && to != g_peers.end() &&
+                (to->second.sin_addr.s_addr != src.sin_addr.s_addr || to->second.sin_port != src.sin_port)) {
+                if (!g_peers.count(key)) g_peers[key] = src;  // the sender, as we see it
+                h->magic = kMagic;
+                SendUdp(s, packet, n, to->second);
+                g_relayed++;
+                LogRelay();
+            }
+            continue;
+        }
         uint64_t join = g_join;
+        auto known = g_peers.find(key);
+        bool viaHost = join && SameAddress(src, join) && key != g_joinHost && g_joinHost;
+        if (known == g_peers.end() || memcmp(&known->second, &src, sizeof src) != 0)
+            Log("net: peer %02x%02x%02x%02x%02x%02x at %s:%u%s", h->srcNode[0], h->srcNode[1], h->srcNode[2],
+                h->srcNode[3], h->srcNode[4], h->srcNode[5], inet_ntoa(src.sin_addr), ntohs(src.sin_port),
+                viaHost ? " (through the host)" : "");
+        // A route through the host never replaces a direct one.
+        if (!viaHost || known == g_peers.end() || SameAddress(known->second, join)) g_peers[key] = src;
+        if (viaHost) g_fromHost++;
+        g_received[key]++;
+        LogRelay();
         if (join && src.sin_addr.s_addr == (uint32_t)join && src.sin_port == (u_short)(join >> 32) && !g_joinHost) {
             g_joinHost = key;
             g_joinState = kJoinAnswered;

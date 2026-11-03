@@ -42,7 +42,7 @@ Versions and what changed in each: [CHANGELOG.md](CHANGELOG.md). The main menu s
 
 **Network**
 - LAN games on modern Windows. The game only speaks IPX, which Windows no longer has; the patch carries it over UDP.
-- Join a game over the internet by typing the host's address on the Network screen.
+- Join a game over the internet by typing the host's address on the Network screen. Three or more players work too: the host's copy passes on what the joining players send each other.
 - Several copies on one PC, for testing.
 
 **Fixes**
@@ -184,7 +184,7 @@ Press **Esc** while typing to cancel. Press **Return** on an empty box to clear 
 
 ### Notes
 
-- **Three or more players over the internet** may not all reach each other yet. In a race every player talks to every other player directly, so the joining players need to reach each other too. Two-player internet games and LAN games of any size work.
+- **Three or more players over the internet** work through the host. In a race every player also talks to every other player directly, and over the internet the joining players usually can't reach each other, only the host. So the host's copy passes their messages on, and only the host needs to forward a port. It's a small part of the traffic (most of it goes between each player and the host anyway), so the host's connection hardly notices. Players on the same LAN still talk directly.
 - **Players must all use this patch.** The Steam release's own network layer (ipxwrapper) can't talk to it. `[Network] Transport=ipxwrapper` puts the original back, for LAN games with unpatched copies.
 
 ### Network settings
@@ -205,7 +205,6 @@ Press **Esc** while typing to cancel. Press **Return** on an empty box to clear 
 ## Not done yet
 
 - **Zombie and alien pedestrians**, the German and UK releases' modes. They need the original disc data to look right, so the option is greyed out.
-- **3+ player internet games:** relaying through the host's copy.
 - **AI opponents in network races.**
 - **A release package.**
 

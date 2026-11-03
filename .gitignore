@@ -1,6 +1,7 @@
 # Game files: never in the repo
 testrun/
 testrun2/
+testrun3/
 testrun-*/
 testgame/
 

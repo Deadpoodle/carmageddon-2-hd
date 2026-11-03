@@ -241,6 +241,8 @@ All coordinates are in 640x480 space; clicks are the easiest route. The screens 
   - Patching 0x519c62 to add a second `sendto`. Moot with ipxwrapper underneath; unnecessary with the shim.
 - **3+ players over the internet:** clients send to each other (§3). A client may never have heard from a peer's node.
   - **v1:** the shim relays unknown-node packets through the host's shim (the joined address). The host knows every client's public endpoint.
+  - **Done (src/netshim.cpp, 0.15.0):** a joiner sends a packet for a node it hasn't heard from (or one it knows only by the host's address) to the join address with magic `2CHR` (kRelay); the host passes a kRelay packet for another node it knows on to that node with the normal magic, so nothing is relayed twice and nothing loops; the receiver learns the sender's node by the host's address. A direct packet replaces the route (LAN stays direct); a route through the host never replaces a direct one.
+  - **Measured (H, three hidden copies on loopback):** in a LAN race the host exchanges ~15 packets/s with each joiner; joiners send each other only ~1.5-3/s (events, not positions). With LAN broadcast off and join by address, joiner<->joiner traffic went through the host at the same rate (host passed on 60 in ~25 s; 29 each way), and all three raced. `net: traffic:` in the log every 10 s gives packets per peer and the relay counts.
   - **Later:** hole punching.
   - LAN and same-PC games are direct.
 
