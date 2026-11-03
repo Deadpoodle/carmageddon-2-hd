@@ -44,6 +44,7 @@ It is a binary patch: a small `dinput.dll` that the game loads at start-up and t
 
 **Fixes**
 - Alt+F4, and Close from the taskbar, quit the game. In the original, Alt+F4 left the game hanging, and Close left it running without a window.
+- Alt+Tab works. Windows' own compatibility fix for this game blocks it with a keyboard hook, which the patch declines. The game pauses while you're away.
 
 All of this is on a new **HD** tab of the in-game Graphics screen (Options → Settings), or in `Carma2HD.ini`.
 

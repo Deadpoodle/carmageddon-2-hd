@@ -108,6 +108,37 @@ DWORD WINAPI Guard(void*) {
     return 0;
 }
 
+// Alt+Tab. Windows' own compatibility database shims this exe, and its shim
+// library (AcGenral.dll) installs a global low-level keyboard hook that
+// swallows Alt+Tab (the Tab never reaches the game and no switcher appears),
+// a fix for old DirectDraw games that broke when switched away from. Through
+// dgVoodoo2 the game handles losing the focus (it minimises and pauses, and
+// resumes on return), so that one hook is declined: a low-level keyboard
+// hook asked for by a Windows compatibility module. Everything else passes.
+void* o_SetWindowsHookExA;
+
+bool FromCompatShim(void* ret) {
+    HMODULE m = nullptr;
+    char path[MAX_PATH] = "";
+    if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                            (LPCSTR)ret, &m) || !m)
+        return false;
+    GetModuleFileNameA(m, path, MAX_PATH);
+    const char* base = strrchr(path, '\\');
+    base = base ? base + 1 : path;
+    return _strnicmp(base, "AcGenral", 8) == 0 || _strnicmp(base, "AcLayers", 8) == 0 ||
+           _strnicmp(base, "AcSpecfc", 8) == 0 || _strnicmp(base, "AcXtrnal", 8) == 0;
+}
+
+HHOOK WINAPI SetWindowsHookExA_NoAltTabBlock(int id, HOOKPROC fn, HINSTANCE mod, DWORD thread) {
+    if (id == WH_KEYBOARD_LL && FromCompatShim(__builtin_return_address(0))) {
+        Log("quit: declined the compatibility shim's keyboard hook that blocks Alt+Tab");
+        SetLastError(ERROR_ACCESS_DENIED);
+        return nullptr;
+    }
+    return reinterpret_cast<decltype(&SetWindowsHookExA)>(o_SetWindowsHookExA)(id, fn, mod, thread);
+}
+
 // The shutdown's message pump: what is waiting, without waiting for more.
 void ShutdownDrain() {
     MSG m;
@@ -152,6 +183,12 @@ void Install() {
               hook::Redirect(0x51c1c8, 0xe8, 0x51cad0, (const void*)&ShutdownDrain) &&
               hook::Patch(0x51c1e4, broadcast, none, 6);
     Log("quit: Alt+F4 and Close quit the game: %s", ok ? "ok" : "FAILED (unexpected bytes)");
+    static const uint8_t hotPatch[5] = {0x8b, 0xff, 0x55, 0x8b, 0xec};  // mov edi,edi; push ebp; mov ebp,esp
+    uintptr_t hookApi = (uintptr_t)GetProcAddress(GetModuleHandleA("user32.dll"), "SetWindowsHookExA");
+    o_SetWindowsHookExA =
+        hookApi ? hook::Detour(hookApi, hotPatch, 5, (const void*)&SetWindowsHookExA_NoAltTabBlock) : nullptr;
+    Log("quit: Alt+Tab: %s", o_SetWindowsHookExA ? "a compatibility shim's blocking keyboard hook will be declined"
+                                                   : "FAILED (SetWindowsHookExA not as expected)");
 }
 
 }  // namespace quit

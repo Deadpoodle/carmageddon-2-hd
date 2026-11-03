@@ -260,6 +260,27 @@ for raw in open(steps_file):
         key(VK["TAB"], int(float(a[0]) * 1000) if a else 80, alt=True)
         time.sleep(1)
         log(f"Alt+Tab: game {'still' if game_in_front() else 'no longer'} in front")
+    elif op == "alttabprobe":  # Alt+Tab with a shot while Alt is held, then who is in front
+        guard()
+        def press(vk, up=False):
+            i = INPUT(type=1)
+            i.ki = KEYBDINPUT(vk, user32.MapVirtualKeyW(vk, 0), 0x0002 if up else 0, 0, 0)
+            send(i)
+        press(VK["MENU"]); time.sleep(0.2)
+        press(VK["TAB"]); time.sleep(0.1); press(VK["TAB"], True)
+        time.sleep(0.8)
+        ImageGrab.grab(bbox=(0, 0, sw, sh)).save(os.path.join(out, (a[0] if a else "alttab") + ".png"))
+        press(VK["MENU"], True)
+        for t in (0.2, 0.8, 2.0):
+            time.sleep(t)
+            h = user32.GetForegroundWindow()
+            cls, title = ctypes.create_unicode_buffer(128), ctypes.create_unicode_buffer(128)
+            user32.GetClassNameW(h, cls, 128)
+            user32.GetWindowTextW(h, title, 128)
+            pid = wt.DWORD()
+            user32.GetWindowThreadProcessId(h, ctypes.byref(pid))
+            log(f"after Alt up: foreground {h} class {cls.value!r} title {title.value[:40]!r} "
+                f"{'(the game)' if pid.value == proc.pid else ''}")
     elif op == "away":
         guard()
         nudge()

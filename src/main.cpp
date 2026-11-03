@@ -140,6 +140,65 @@ void __cdecl GameDebugPrint(const char* fmt, ...) {
     Log("game: %s", line);
 }
 
+// C2HD_GAMELOG=1 also: who in the process installs Windows hooks or registers
+// raw input (either can take keys such as Alt+Tab's Tab before the system
+// sees them), with the calling module. Only hooked when the API starts with
+// the usual hot-patch prologue (mov edi,edi; push ebp; mov ebp,esp).
+void* o_SetWindowsHookExA;
+void* o_SetWindowsHookExW;
+void* o_RegisterRawInputDevices;
+
+void LogCaller(const char* what, void* ret) {
+    HMODULE m = nullptr;
+    char path[MAX_PATH] = "?";
+    if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           (LPCSTR)ret, &m) && m)
+        GetModuleFileNameA(m, path, MAX_PATH);
+    const char* base = strrchr(path, 92);
+    Log("%s, called from %s+%#lx", what, base ? base + 1 : path, m ? (DWORD)((uintptr_t)ret - (uintptr_t)m) : 0ul);
+}
+
+HHOOK WINAPI LogHookA(int id, HOOKPROC fn, HINSTANCE mod, DWORD thread) {
+    char what[96];
+    snprintf(what, sizeof what, "hooks: SetWindowsHookExA(id %d, thread %lu)", id, thread);
+    LogCaller(what, __builtin_return_address(0));
+    return reinterpret_cast<decltype(&SetWindowsHookExA)>(o_SetWindowsHookExA)(id, fn, mod, thread);
+}
+HHOOK WINAPI LogHookW(int id, HOOKPROC fn, HINSTANCE mod, DWORD thread) {
+    char what[96];
+    snprintf(what, sizeof what, "hooks: SetWindowsHookExW(id %d, thread %lu)", id, thread);
+    LogCaller(what, __builtin_return_address(0));
+    return reinterpret_cast<decltype(&SetWindowsHookExW)>(o_SetWindowsHookExW)(id, fn, mod, thread);
+}
+BOOL WINAPI LogRawInput(PCRAWINPUTDEVICE devs, UINT n, UINT size) {
+    for (UINT i = 0; i < n; i++) {
+        char what[128];
+        snprintf(what, sizeof what, "hooks: RegisterRawInputDevices(page %#x usage %#x flags %#lx)",
+                 devs[i].usUsagePage, devs[i].usUsage, (unsigned long)devs[i].dwFlags);
+        LogCaller(what, __builtin_return_address(0));
+    }
+    return reinterpret_cast<decltype(&RegisterRawInputDevices)>(o_RegisterRawInputDevices)(devs, n, size);
+}
+
+void LogHooks() {
+    static const uint8_t hot[5] = {0x8b, 0xff, 0x55, 0x8b, 0xec};
+    HMODULE user32 = GetModuleHandleA("user32.dll");
+    struct {
+        const char* name;
+        void* fn;
+        void** orig;
+    } apis[] = {{"SetWindowsHookExA", (void*)&LogHookA, &o_SetWindowsHookExA},
+                {"SetWindowsHookExW", (void*)&LogHookW, &o_SetWindowsHookExW},
+                {"RegisterRawInputDevices", (void*)&LogRawInput, &o_RegisterRawInputDevices}};
+    for (auto& a : apis) {
+        uintptr_t at = (uintptr_t)GetProcAddress(user32, a.name);
+        const uint8_t* b = (const uint8_t*)at;
+        *a.orig = at ? hook::Detour(at, hot, 5, a.fn) : nullptr;
+        Log("hooks: %s %s (starts %02x %02x %02x %02x %02x)", a.name, *a.orig ? "logged" : "NOT logged", b ? b[0] : 0,
+            b ? b[1] : 0, b ? b[2] : 0, b ? b[3] : 0, b ? b[4] : 0);
+    }
+}
+
 void StartTests() {
     AddVectoredExceptionHandler(0, &CrashLogger);
     if (Env("C2HD_GAMELOG") == "1") {
@@ -149,6 +208,7 @@ void StartTests() {
         static const uint8_t stub[5] = {0xc3, 0x90, 0x90, 0x90, 0x90};  // ret, then padding
         Log("test: game debug print to the log: %s", hook::Patch(0x44c590, stub, jmp, 5) ? "on" : "FAILED");
         quit::LogFocusMessages();
+        LogHooks();
     }
     if (Env("C2HD_FLOWLOG") == "1") frontend::InstallFlowLog();
     if (Env("C2HD_TEST_EXIT") == "window") {
