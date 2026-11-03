@@ -63,6 +63,8 @@ Acquire_t o_Acquire;
 volatile BYTE g_script[256];  // scripted key state (0x80 = down), test runs only
 volatile int g_givePowerup = -1;  // POWERUP=n: given on the game thread's next keyboard read
 volatile bool g_dumpMap;          // DUMPMAP: the race's map and minimap pixelmaps to shots\, likewise
+volatile int g_finish = -1;       // FINISH[=ms]: the race is completed (laps), likewise; see below
+volatile int g_clockBack;
 
 // A pixelmap to shots\<name>_N.raw: a 16-byte header (width, height, row
 // bytes, type) and the rows as they are in memory.
@@ -302,6 +304,21 @@ HRESULT WINAPI h_GetDeviceState(void* dev, DWORD size, void* data) {
             Log("script: power-up %d", n);
             ((int(__fastcall*)(uintptr_t, int, int, int))0x4d8d40)(0x75bc2c, n, 1, 1);
         }
+        if (g_finish >= 0 && *(uintptr_t*)0x762438) {
+            // RaceCompleted 0x5030b0 (fastcall reason; 0 = all laps raced).
+            g_clockBack = g_finish;
+            g_finish = -1;
+            Log("script: race completed");
+            ((void(__fastcall*)(int))0x5030b0)(0);
+        }
+        if (g_clockBack > 0 && *(volatile int*)0x68c784 == 3) {
+            // FINISH=ms: once the time bonus counts up (state 3 of 0x68c784), the
+            // game time (0x514c30) goes ms back, by raising the lost time
+            // 0x6abef4, as it once did in the player's game (fixes.cpp).
+            Log("script: game time %d ms back during the time bonus", g_clockBack);
+            *(unsigned*)0x6abef4 += (unsigned)g_clockBack;
+            g_clockBack = 0;
+        }
     }
     if (SUCCEEDED(hr)) {
         MapLog((const BYTE*)data);
@@ -360,6 +377,7 @@ struct Step {
     WORD pad = 0;         // PAD=UP|DOWN|LEFT|RIGHT|A|B|X|Y|START|BACK|LB|RB holds that pad button
     const KeyName* sweepKey = nullptr;  // KEYSWEEP[=key]: press it round the screen (default DOWN)
     std::string goTo;     // GOTO=name: press Down until that item has the focus
+    int finish = -1;      // FINISH[=ms]: complete the race (and set the game time ms back during the time bonus)
     DWORD wait = 0;       // WAIT=s: pause (later steps' times count from the start, so a
                           // tour with long steps can use small times and WAITs)
     int powerup = -1;     // POWERUP=n: give the player power-up n (in a race)
@@ -389,6 +407,8 @@ DWORD WINAPI ScriptThread(void*) {
                 g_givePowerup = s.powerup;
             } else if (s.dumpMap) {
                 g_dumpMap = true;
+            } else if (s.finish >= 0) {
+                g_finish = s.finish;
             } else if (s.sweepKey) {
                 frontend::KeySweep(&Press, s.sweepKey->dik, s.sweepKey->name);
             } else if (!s.goTo.empty()) {
@@ -509,6 +529,8 @@ void StartScript(const char* script) {
             else if (name.rfind("WAIT=", 0) == 0) st.wait = (DWORD)(atof(name.c_str() + 5) * 1000);
             else if (name.rfind("POWERUP=", 0) == 0) st.powerup = atoi(name.c_str() + 8);
             else if (name == "DUMPMAP") st.dumpMap = true;
+            else if (name == "FINISH") st.finish = 0;
+            else if (name.rfind("FINISH=", 0) == 0) st.finish = atoi(name.c_str() + 7);
             else if (name.rfind("PAD=", 0) == 0) {
                 static const struct {
                     const char* name;

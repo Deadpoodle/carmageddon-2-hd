@@ -49,6 +49,7 @@ Versions and what changed in each: [CHANGELOG.md](CHANGELOG.md). The main menu s
 **Fixes**
 - Alt+F4, and Close from the taskbar, quit the game. In the original, Alt+F4 left the game hanging, and Close left it running without a window.
 - Alt+Tab works. Windows' own compatibility fix for this game blocks it with a keyboard hook, which the patch declines. The game pauses while you're away.
+- The time bonus at the end of a race can't go negative. In the original, if the game clock stepped back while the bonus counted up, a 32-bit overflow gave a bonus of minus millions and the race timer started climbing.
 
 All of this is on a new **HD** tab of the in-game Graphics screen (Options → Settings), or in `Carma2HD.ini`.
 
