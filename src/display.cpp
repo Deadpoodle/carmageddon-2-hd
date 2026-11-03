@@ -74,7 +74,8 @@ std::vector<dgvconf::Key> VisualKeys() {
     dm.dmSize = sizeof dm;
     int hz = EnumDisplaySettingsA(nullptr, ENUM_CURRENT_SETTINGS, &dm) && dm.dmDisplayFrequency > 1
                  ? (int)dm.dmDisplayFrequency : 60;
-    int cap = rate == "60" ? 60 : (hz < 100 ? hz : 100);
+    int fixed = atoi(rate.c_str());  // 60 (the HD tab's choice) or any rate from 20 to 100
+    int cap = fixed >= 20 && fixed <= 100 ? fixed : (hz < 100 ? hz : 100);
     bool vsync = cap == hz;  // tear-free when the screen's own rate is within the cap
     Log("display: visuals: AA %s, filtering %s, mipmaps %s, colour %s, %d fps cap (screen %d Hz, vsync %s)",
         aa.c_str(), filtering.c_str(), mip.c_str(), smooth ? "smooth" : "16-bit", cap, hz, vsync ? "on" : "off");
