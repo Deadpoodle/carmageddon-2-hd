@@ -4,6 +4,9 @@ Carmageddon II HD follows [semantic versioning](https://semver.org/). Until a fi
 
 The game itself is the Steam release, which labels itself `v1.02a`. It is the same build as the official "Super Patch V2.0" (both game exes were built on 30 November 1998). Steam's copy has its CD protection removed, plus an extra import for its CD-music player.
 
+## 0.14.2 (2026-11-03)
+- The Wrecks gallery after a race works from the keyboard and pad. Left/Right (A/D, the D-pad) scroll the cars and Up/Down choose BUY or OK. The original screen only took the mouse.
+
 ## 0.14.1 (2026-11-03)
 - Power-up icons no longer show thin lines down their sides. With smoothed textures, each edge picked up colour from the opposite edge.
 

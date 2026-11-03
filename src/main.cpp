@@ -30,6 +30,7 @@
 #include "settings.h"
 #include "sharptext.h"
 #include "version.h"
+#include "wrecks.h"
 
 namespace {
 
@@ -270,6 +271,7 @@ void Start() {
     movie::Install();
     sharptext::Install();
     icons::Install();
+    wrecks::Install();
     music::Install();
     StartTests();
     if (netshim::Install()) netmenu::Install();  // after the test harness: tests stay on loopback

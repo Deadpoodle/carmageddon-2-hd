@@ -37,7 +37,7 @@ Versions and what changed in each: [CHANGELOG.md](CHANGELOG.md). The main menu s
 **Controls**
 - A modern keyboard scheme (W/A/S/D or the arrows), and any action can be put on any key.
 - Xbox-style controllers through XInput, in races and in menus.
-- Menus work with the arrows, W/S, a controller or the mouse.
+- Menus work with the arrows, W/S, a controller or the mouse. That includes the Wrecks gallery after a race, which the original left to the mouse: Left/Right (A/D, the D-pad) scroll the wrecked cars, Up/Down pick BUY or OK.
 
 **Network**
 - LAN games on modern Windows. The game only speaks IPX, which Windows no longer has; the patch carries it over UDP.
