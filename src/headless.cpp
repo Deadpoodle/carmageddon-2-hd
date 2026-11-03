@@ -62,6 +62,13 @@ std::string Lower(std::string s) {
 
 // Whatever moves or shows the window, it stays off-screen and inactive.
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    if (msg == WM_WINDOWPOSCHANGED || msg == WM_SHOWWINDOW || msg == WM_STYLECHANGED) {
+        RECT r = {};
+        GetWindowRect(hwnd, &r);
+        Log("headless: msg %#x wp %#lx: window at %ld,%ld..%ld,%ld, style %#lx, %s", msg, (unsigned long)wp, r.left,
+            r.top, r.right, r.bottom, (unsigned long)GetWindowLongA(hwnd, GWL_STYLE),
+            IsWindowVisible(hwnd) ? "visible" : "hidden");
+    }
     if (msg == WM_WINDOWPOSCHANGING) {
         auto* wpos = (WINDOWPOS*)lp;
         wpos->x = kOff;
@@ -153,8 +160,11 @@ DWORD WINAPI Watchdog(void*) {
         RECT r, screen = {GetSystemMetrics(SM_XVIRTUALSCREEN), GetSystemMetrics(SM_YVIRTUALSCREEN), 0, 0}, both;
         screen.right = screen.left + GetSystemMetrics(SM_CXVIRTUALSCREEN);
         screen.bottom = screen.top + GetSystemMetrics(SM_CYVIRTUALSCREEN);
-        if (IsWindowVisible(g_hwnd) && GetWindowRect(g_hwnd, &r) && IntersectRect(&both, &r, &screen))
+        if (IsWindowVisible(g_hwnd) && GetWindowRect(g_hwnd, &r) && IntersectRect(&both, &r, &screen)) {
+            Log("headless: window at %ld,%ld..%ld,%ld, style %#lx, ex %#lx", r.left, r.top, r.right, r.bottom,
+                (unsigned long)GetWindowLongA(g_hwnd, GWL_STYLE), (unsigned long)GetWindowLongA(g_hwnd, GWL_EXSTYLE));
             Abort("the test window reached the visible desktop");
+        }
     }
 }
 
@@ -281,7 +291,8 @@ bool InstallScreen() {
 // process's own windows: the game's and its drivers' imports are hooked
 // above, but dgVoodoo2's DLLs are packed (their calls can't be found), and on
 // a PC where the foreground lock timeout is 0 any of them takes the focus
-// from the player at once. Each must start with the hot-patch prologue.
+// from the player at once. Each must start with the hot-patch prologue or be a
+// jmp [abs32] forwarding stub (as all four are on Windows 10's 32-bit user32).
 void* o_SetForegroundWindowApi;
 void* o_BringWindowToTopApi;
 void* o_SetActiveWindowApi;
@@ -304,6 +315,59 @@ HWND WINAPI SetActiveWindowApi(HWND hwnd) {
     return reinterpret_cast<decltype(&SetActiveWindow)>(o_SetActiveWindowApi)(hwnd);
 }
 
+// Moves of the test window, from anywhere: dgVoodoo2 sometimes sized it to
+// its forced resolution at 0,0 with a call that skipped WM_WINDOWPOSCHANGING
+// (so the window procedure above couldn't keep it off-screen) and the
+// watchdog ended the run. Any move of it now goes to kOff, and the first call
+// from each module is logged.
+void* o_SetWindowPosApi;
+void* o_MoveWindowApi;
+void* o_SetWindowPlacementApi;
+
+void LogMover(const char* api, void* from) {
+    static HMODULE seen[8];
+    HMODULE m = nullptr;
+    if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                            (LPCSTR)from, &m))
+        return;
+    for (HMODULE& s : seen) {
+        if (s == m) return;
+        if (!s) {
+            s = m;
+            char path[MAX_PATH] = "?";
+            GetModuleFileNameA(m, path, MAX_PATH);
+            const char* base = strrchr(path, 92);  // the last backslash
+            Log("headless: %s on the test window from %s, kept off-screen", api, base ? base + 1 : path);
+            return;
+        }
+    }
+}
+BOOL WINAPI SetWindowPosApi(HWND hwnd, HWND after, int x, int y, int w, int h, UINT flags) {
+    if (hwnd == g_hwnd && g_hwnd) {
+        LogMover("SetWindowPos", __builtin_return_address(0));
+        x = y = kOff;
+        flags = (flags & ~SWP_NOMOVE) | SWP_NOACTIVATE | SWP_NOZORDER;
+    }
+    return reinterpret_cast<decltype(&SetWindowPos)>(o_SetWindowPosApi)(hwnd, after, x, y, w, h, flags);
+}
+BOOL WINAPI MoveWindowApi(HWND hwnd, int x, int y, int w, int h, BOOL repaint) {
+    if (hwnd == g_hwnd && g_hwnd) {
+        LogMover("MoveWindow", __builtin_return_address(0));
+        x = y = kOff;
+    }
+    return reinterpret_cast<decltype(&MoveWindow)>(o_MoveWindowApi)(hwnd, x, y, w, h, repaint);
+}
+BOOL WINAPI SetWindowPlacementApi(HWND hwnd, const WINDOWPLACEMENT* wp) {
+    if (hwnd == g_hwnd && g_hwnd && wp) {
+        LogMover("SetWindowPlacement", __builtin_return_address(0));
+        WINDOWPLACEMENT copy = *wp;
+        OffsetRect(&copy.rcNormalPosition, kOff - copy.rcNormalPosition.left, kOff - copy.rcNormalPosition.top);
+        if (copy.showCmd == SW_MAXIMIZE || copy.showCmd == SW_SHOWMAXIMIZED) copy.showCmd = SW_SHOWNOACTIVATE;
+        return reinterpret_cast<decltype(&SetWindowPlacement)>(o_SetWindowPlacementApi)(hwnd, &copy);
+    }
+    return reinterpret_cast<decltype(&SetWindowPlacement)>(o_SetWindowPlacementApi)(hwnd, wp);
+}
+
 bool BlockForegroundCalls() {
     static const uint8_t hot[5] = {0x8b, 0xff, 0x55, 0x8b, 0xec};  // mov edi,edi; push ebp; mov ebp,esp
     HMODULE user32 = GetModuleHandleA("user32.dll");
@@ -313,12 +377,26 @@ bool BlockForegroundCalls() {
         void** orig;
     } apis[] = {{"SetForegroundWindow", (void*)&SetForegroundWindowApi, &o_SetForegroundWindowApi},
                 {"BringWindowToTop", (void*)&BringWindowToTopApi, &o_BringWindowToTopApi},
-                {"SetActiveWindow", (void*)&SetActiveWindowApi, &o_SetActiveWindowApi}};
+                {"SetActiveWindow", (void*)&SetActiveWindowApi, &o_SetActiveWindowApi},
+                {"SetWindowPos", (void*)&SetWindowPosApi, &o_SetWindowPosApi},
+                {"MoveWindow", (void*)&MoveWindowApi, &o_MoveWindowApi},
+                {"SetWindowPlacement", (void*)&SetWindowPlacementApi, &o_SetWindowPlacementApi}};
     bool ok = true;
     for (auto& a : apis) {
         uintptr_t at = (uintptr_t)GetProcAddress(user32, a.name);
         *a.orig = at ? hook::Detour(at, hot, 5, a.fn) : nullptr;
-        if (!*a.orig) Log("headless: %s not blockable", a.name);
+        // Or an export that is a forwarding stub, jmp dword ptr [abs32] (ff 25):
+        // absolute, so it runs unchanged from the trampoline.
+        uint8_t stub[6];
+        if (!*a.orig && at && *(const uint8_t*)at == 0xff && *(const uint8_t*)(at + 1) == 0x25) {
+            memcpy(stub, (const void*)at, 6);
+            *a.orig = hook::Detour(at, stub, 6, a.fn);
+        }
+        if (!*a.orig) {
+            const uint8_t* b = (const uint8_t*)at;
+            Log("headless: %s not blockable (starts %02x %02x %02x %02x %02x %02x %02x %02x)", a.name, b ? b[0] : 0,
+                b ? b[1] : 0, b ? b[2] : 0, b ? b[3] : 0, b ? b[4] : 0, b ? b[5] : 0, b ? b[6] : 0, b ? b[7] : 0);
+        }
         ok = ok && *a.orig;
     }
     return ok;
