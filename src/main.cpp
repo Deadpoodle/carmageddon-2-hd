@@ -28,10 +28,11 @@
 #include "log.h"
 #include "settings.h"
 #include "sharptext.h"
+#include "version.h"
 
 namespace {
 
-const char* kVersion = "0.0.1";
+const char* kVersion = C2HD_VERSION;
 
 std::string g_dir;  // game folder, with trailing backslash
 FILE* g_log;

@@ -25,6 +25,7 @@
 #include "hook.h"
 #include "log.h"
 #include "settings.h"
+#include "version.h"
 
 namespace frontend {
 
@@ -600,6 +601,12 @@ void Install(int w) {
           "version label");
     Check(hook::Patch(0x46a1a0, (const uint8_t*)"\x66\x8b\x4a\x34", (const uint8_t*)"\x66\xb9\x80\x02", 4),
           "version label");
+    // ...and names this patch after the game's own label (0x65574c "v1.02a",
+    // the build the official Super Patch V2.0 shipped); the font capitalises.
+    static char label[64];
+    snprintf(label, sizeof label, "%s   carma2-hd-%s", (const char*)0x65574c, C2HD_VERSION);
+    for (uintptr_t imm : {0x46a184, 0x46a1a5})  // mov edx, 0x65574c (width, then draw)
+        Check(hook::PatchU32(imm, 0x65574c, (uint32_t)(uintptr_t)label), "version label");
 
     // Mouse.
     static const uint8_t getMouse[5] = {0xa1, 0xe0, 0x21, 0x66, 0x00};

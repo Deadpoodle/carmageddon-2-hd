@@ -16,6 +16,8 @@ It is a binary patch: a small `dinput.dll` that the game loads at start-up and t
 - [Building](#building)
 - [Credits](#credits)
 
+Versions and what changed in each: [CHANGELOG.md](CHANGELOG.md). The main menu shows the version in its bottom right corner.
+
 ## Features
 
 **Display**
