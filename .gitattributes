@@ -1,0 +1,2 @@
+# Shell scripts run on Linux (the Steam Deck installer): always LF
+*.sh text eol=lf

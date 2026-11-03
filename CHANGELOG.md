@@ -4,6 +4,12 @@ Carmageddon II HD follows [semantic versioning](https://semver.org/). Until a fi
 
 The game itself is the Steam release, which labels itself `v1.02a`. It is the same build as the official "Super Patch V2.0" (both game exes were built on 30 November 1998). Steam's copy has its CD protection removed, plus an extra import for its CD-music player.
 
+## 0.19.0 (2026-11-03)
+- Steam Deck and Linux: `install-steamdeck.sh` installs the patch under Proton. It finds the game in any Steam library, fetches and checks dgVoodoo2, and sets the launch option that makes Proton load the patch (`WINEDLLOVERRIDES="dinput,ddraw,d3dimm=n,b"`). `--uninstall` takes it all out again.
+- Checked at the Deck's 1280x800: menus, films, the race HUD and the map fill the 16:10 screen (768x480 Hor+).
+- The log says when the game runs under Wine. It also warns when DirectDraw isn't dgVoodoo2's copy in the game folder, which on Linux means the launch option is incomplete.
+- `tools/package.sh` builds the release zip, `carma2hd.zip`, from committed code only.
+
 ## 0.18.0 (2026-11-03)
 - Every menu works without a mouse, from the keyboard or a controller. Change Car: Left/Right change the car, Up/Down pick OK or CANCEL. Load Game: Up/Down move along the saved games and scroll the list. Network game options: Left/Right change the starting credit and target. Esc (B on a pad) leaves Change Car and Load Game; in the lobby it moves to ABORT GAME, and a second Esc aborts. The original left these to the mouse; without one, Load Game couldn't even be left.
 - Moving up or down the pause menu in a race no longer ends the race. The original activated Abort Race as soon as the keys landed on it.

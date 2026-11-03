@@ -8,6 +8,7 @@ It is a binary patch: a small `dinput.dll` that the game loads at start-up and t
 
 - [Features](#features)
 - [Installing](#installing)
+- [Steam Deck and Linux](#steam-deck-and-linux)
 - [Settings](#settings)
 - [Controls](#controls)
 - [Network play](#network-play)
@@ -61,15 +62,51 @@ All of this is on a new **HD** tab of the in-game Graphics screen (Options → S
 
 ## Installing
 
-There is no release package yet. Until there is:
+The release zip, `carma2hd.zip`, holds `dinput.dll`, `dgVoodoo.conf`, the Steam Deck installer and these docs (`tools/package.sh` builds it). On Windows:
 
-1. Build `dinput.dll` (see [Building](#building)), or take a built copy.
+1. Take `dinput.dll` from the zip, or build it (see [Building](#building)).
 2. Download [dgVoodoo2](https://github.com/dege-diosg/dgVoodoo2/releases) (tested with 2.87.5). From its `MS\x86` folder, take `DDraw.dll` and `D3DImm.dll`.
 3. Put `dinput.dll`, `DDraw.dll`, `D3DImm.dll` and this repo's [`dist/dgVoodoo.conf`](dist/dgVoodoo.conf) in the game's folder, next to `CARMA2_HW.EXE`.
    - To keep the store's copy untouched, copy the whole game folder somewhere else first and install there.
 4. Start the game as usual: the store's Play button works. The first start writes `Carma2HD.ini` next to the game, with every setting explained.
 
 To remove the patch, delete those four files and `Carma2HD.ini`.
+
+## Steam Deck and Linux
+
+The patch runs under Proton, Steam's Windows layer, on a Steam Deck or any Linux PC. Proton normally uses its own copies of `dinput.dll` and `ddraw.dll`, so the game needs a launch option that tells it to load the game folder's copies instead:
+
+```
+WINEDLLOVERRIDES="dinput,ddraw,d3dimm=n,b" %command%
+```
+
+**Installing with the script** (in Desktop Mode):
+
+1. Get `carma2hd.zip` onto the Deck (a USB stick, or a download) and extract it, for example into `Downloads`.
+2. Open **Konsole** and run the installer from where you extracted it:
+   ```bash
+   bash ~/Downloads/carma2hd/install-steamdeck.sh
+   ```
+3. The script:
+   - finds the game in any Steam library, on internal storage or an SD card;
+   - copies in `dinput.dll` and `dgVoodoo.conf`;
+   - downloads dgVoodoo2 2.87.5 from its GitHub releases and checks its `DDraw.dll` and `D3DImm.dll` before copying them in;
+   - sets the launch option above, keeping any options already there.
+4. Steam rewrites its settings when it exits, so the launch option can only be set while Steam is closed. If Steam is running, the script asks you to exit it (the Steam icon in the taskbar → Exit), then press Enter. Type `s` instead to skip, and paste the line above into **Carmageddon 2 → Properties → General → Launch Options** yourself.
+5. Go back to Gaming Mode and start the game as usual.
+
+Running the script again updates the patch. `bash install-steamdeck.sh --uninstall` removes the patch files and takes our part out of the launch option.
+
+**On the Deck:**
+- **Screen:** `Resolution=auto` picks the Deck's 1280x800. Its 16:10 shape gets a 768x480 Hor+ view, with the HUD spread across the width. Docked, auto picks the external display's resolution instead.
+- **Frame rate:** auto follows the screen's refresh rate: 60 on the LCD Deck, 90 on the OLED.
+- **Controls:** use Steam Input's **Gamepad** layout. The patch then reads the Deck as an Xbox pad (see [Controls](#controls)), in races and in every menu.
+- **Typing** a driver name or an IP address: Steam + X brings up the on-screen keyboard.
+
+**If it doesn't work:**
+- **No `Carma2HD.log` in the game folder after a start:** the patch didn't load. Check the launch option.
+- **The log says "DirectDraw is ... not dgVoodoo2's":** the launch option is missing `ddraw` or `d3dimm`, so the game is stuck at 640x480.
+- **The log's first lines say "running under Wine":** the patch is loaded. It names Proton's Wine version there.
 
 ## Settings
 
@@ -227,7 +264,7 @@ Press **Esc** while typing to cancel. Press **Return** on an empty box to clear 
 
 - **Zombie and alien pedestrians**, the German and UK releases' modes. They need the original disc data to look right, so the option is greyed out.
 - **AI opponents in network races.**
-- **A release package.**
+- **A public release.** The repo and its releases are private for now, so the Steam Deck installer can't fetch the patch on its own yet: copy the zip over. Once releases are public, running the script alone downloads the latest one.
 
 ## Building
 

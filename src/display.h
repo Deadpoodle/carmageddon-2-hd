@@ -7,4 +7,7 @@ namespace display {
 // Before the game runs: syncs dgVoodoo.conf and hooks camera creation.
 void Install();
 
+// Wine's version when the game runs under Wine (Proton, the Steam Deck), else nullptr.
+const char* WineVersion();
+
 }  // namespace display

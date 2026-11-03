@@ -26,6 +26,7 @@
 #include "frontend.h"
 #include "game.h"
 #include "hook.h"
+#include "loader.h"
 #include "log.h"
 #include "settings.h"
 #include "wide.h"
@@ -108,9 +109,38 @@ std::vector<dgvconf::Key> With(std::vector<dgvconf::Key> keys) {
     return keys;
 }
 
+// Under Wine (Proton on Linux and the Steam Deck) the game folder's DLLs are
+// loaded only with a DLL override (WINEDLLOVERRIDES="dinput,ddraw,d3dimm=n,b";
+// README, tools/install-steamdeck.sh): without dinput the patch never runs,
+// and without ddraw/d3dimm Wine's own DirectDraw draws the game, so none of
+// dgVoodoo2's resolution, scaling or filtering apply.
+void CheckDirectDraw(const char* name, HMODULE m) {
+    std::string base = Lower(name ? name : "");
+    base = base.substr(base.find_last_of("\\/") + 1);
+    if (!m || (base != "ddraw" && base != "ddraw.dll")) return;
+    char path[MAX_PATH] = "";
+    GetModuleFileNameA(m, path, MAX_PATH);
+    std::string dir = path;
+    dir.resize(dir.rfind('\\') + 1);
+    if (_stricmp(dir.c_str(), GameDir().c_str()) == 0) return;
+    Log("display: DirectDraw is %s, not dgVoodoo2's DDraw.dll in the game folder: the game will draw at 640x480%s",
+        path, WineVersion() ? " (on Linux/Steam Deck the launch option needs ddraw=n,b and d3dimm=n,b)" : "");
+}
+
 }  // namespace
 
+const char* WineVersion() {
+    static const char* version = [] {
+        HMODULE ntdll = GetModuleHandleA("ntdll.dll");
+        auto get = ntdll ? (const char*(__cdecl*)())GetProcAddress(ntdll, "wine_get_version") : nullptr;
+        return get ? get() : nullptr;
+    }();
+    return version;
+}
+
 void Install() {
+    if (const char* wine = WineVersion()) Log("display: running under Wine %s (Proton, Linux or Steam Deck)", wine);
+    loader::OnLoad(&CheckDirectDraw);
     // Always the Direct3D driver, so dgVoodoo2 renders it (the Glide driver is
     // capped at 640x480 and nGlide's 63 fps): the -d3d switch, set before the
     // game reads its command line, so the store's Play button works as is.
