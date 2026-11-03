@@ -4,6 +4,9 @@ Carmageddon II HD follows [semantic versioning](https://semver.org/). Until a fi
 
 The game itself is the Steam release, which labels itself `v1.02a`. It is the same build as the official "Super Patch V2.0" (both game exes were built on 30 November 1998). Steam's copy has its CD protection removed, plus an extra import for its CD-music player.
 
+## 0.17.2 (2026-11-03)
+- The car picture on the main menu no longer shows a grid of thin lines. It is six tiles, and with smoothed textures each tile's edge picked up colour from its opposite edge. The same goes for the front end's other pictures.
+
 ## 0.17.1 (2026-11-03)
 - The time bonus at the end of a race no longer goes to minus millions. The original game turns the time left into credits a step every 15 ms of game time. If the game clock was ever behind its last step, the step count wrapped around and the race timer gained time instead.
 
