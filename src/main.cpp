@@ -216,6 +216,150 @@ int __fastcall LogSetPedMove(uintptr_t ped, int move, int rate, int blend, int e
     return o_SetPedMove(ped, move, rate, blend, end, time, state);
 }
 
+// C2HD_PEDLOG=1 also: after each frame's ped update (0x4d3740), the two
+// active peds nearest the camera: animation frame/fraction/rate, facing,
+// torso (bone 0) and left leg (bone 2) translations, avoidance mode, physics
+// (re/peds.md 5b.1).
+void (*o_PedUpdate)();
+const auto kBoneMatrix0 = (float*(__fastcall*)(uintptr_t))0x407aa0;
+const auto kBoneMatrix = (float*(__fastcall*)(uintptr_t, int))0x407ad0;
+const auto kGameTime = (unsigned(*)())0x514c30;
+
+// C2HD_PEDWATCH=1 (with PEDLOG): the nearest ped (=m<n>: the nearest in
+// move n) is watched; the three functions that write a ped's torso matrix
+// (key-frame apply 0x407b30, facing 0x40a730, ground snap 0x40b0a0; each
+// fastcall char, edx, one stack arg) log its torso x before and after when
+// it changes, with their caller.
+uintptr_t g_watchPed, g_watchChar;
+const float* g_watchX;
+using CharFn = int(__fastcall*)(uintptr_t, int, int);
+CharFn o_ApplyFrame, o_SetFacing, o_GroundSnap;
+
+int Watched(const char* name, CharFn fn, uintptr_t c, int edx, int arg, void* from) {
+    if (!g_watchX || c != g_watchChar) return fn(c, edx, arg);
+    float before = *g_watchX;
+    int r = fn(c, edx, arg);
+    if (*g_watchX != before)
+        Log("pedw %u %s edx %d arg %d x %.4f -> %.4f fr %d from %p", kGameTime(), name, edx, arg, before, *g_watchX,
+            *(int16_t*)(c + 0x1c), from);
+    return r;
+}
+// C2HD_PEDWATCH also arms a hardware write watch (debug register 0) on the
+// watched torso x, set by the handler of an exception the game thread raises,
+// logging the address after each writing instruction (and, for library
+// routines, the game code addresses on the stack). Slow: use C2HD_SLOWMO.
+constexpr DWORD kArmWatch = 0xE0C2D001;
+int g_watchHits;
+
+LONG CALLBACK WatchHandler(EXCEPTION_POINTERS* ep) {
+    CONTEXT* c = ep->ContextRecord;
+    DWORD code = ep->ExceptionRecord->ExceptionCode;
+    if (code == kArmWatch) {
+        c->Dr0 = (uintptr_t)g_watchX;
+        c->Dr7 = 1 | (1 << 16) | (3 << 18);  // L0, break on write, 4 bytes
+        c->ContextFlags |= CONTEXT_DEBUG_REGISTERS;
+        return EXCEPTION_CONTINUE_EXECUTION;
+    }
+    if (code == EXCEPTION_SINGLE_STEP && (c->Dr6 & 1)) {
+        c->Dr6 = 0;
+        if (g_watchHits++ < 3000) {
+            char callers[96] = "";
+            if (c->Eip >= 0x520000) {
+                const uint32_t* sp = (const uint32_t*)c->Esp;
+                size_t n = 0;
+                for (int i = 0; i < 24 && n < sizeof callers - 10; i++)
+                    if (sp[i] >= 0x401000 && sp[i] < 0x520000) n += snprintf(callers + n, sizeof callers - n, " %08x", sp[i]);
+            }
+            Log("pedw %u hw eip %08lx x %.4f%s", kGameTime(), (unsigned long)c->Eip, *g_watchX, callers);
+        }
+        return EXCEPTION_CONTINUE_EXECUTION;
+    }
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+
+int __fastcall ApplyFrame(uintptr_t c, int edx, int arg) {
+    return Watched("apply", o_ApplyFrame, c, edx, arg, __builtin_return_address(0));
+}
+int __fastcall SetFacing(uintptr_t c, int edx, int arg) {
+    return Watched("facing", o_SetFacing, c, edx, arg, __builtin_return_address(0));
+}
+int __fastcall GroundSnap(uintptr_t c, int edx, int arg) {
+    return Watched("ground", o_GroundSnap, c, edx, arg, __builtin_return_address(0));
+}
+
+// C2HD_SLOWMO=k (with PEDLOG): from the first race frame the game's clock
+// (PDGetTotalTime 0x51d410, ms) runs k times slower, so a slow hidden run
+// still sees short frames in game time (the ped twitch needs ~10 ms).
+unsigned (*o_Clock)();
+unsigned g_slowFrom, g_slow;
+
+unsigned Clock() {
+    unsigned r = o_Clock();
+    return g_slow && r > g_slowFrom ? g_slowFrom + (r - g_slowFrom) / g_slow : r;
+}
+
+void PedFrameLog() {
+    static unsigned slow = (unsigned)atoi(Env("C2HD_SLOWMO").c_str());
+    if (slow > 1 && !g_slow && o_Clock) {
+        g_slowFrom = o_Clock();
+        g_slow = slow;
+        Log("test: game clock %u times slower from now", slow);
+    }
+    // C2HD_PEDWATCH=1: the nearest ped; =m<n>: the nearest ped in move n
+    static std::string watchWhat = Env("C2HD_PEDWATCH");
+    static bool watch = !watchWhat.empty();
+    static int watchMove = watchWhat[0] == 'm' ? atoi(watchWhat.c_str() + 1) : -1;
+    o_PedUpdate();
+    uintptr_t peds = *(uintptr_t*)0x744808;
+    int count = *(int*)0x7447d4;
+    const float* cam = (const float*)0x74d484;
+    struct Near { float d; uintptr_t p; } best[2] = {{1e9f, 0}, {1e9f, 0}};
+    for (int i = 0; peds && i < count; i++) {
+        uintptr_t p = peds + i * 0x54, c = *(uintptr_t*)p;
+        if (!c || !(*(uint16_t*)(p + 8) & 1)) continue;
+        const float* t = kBoneMatrix0(c);
+        if (!t) continue;
+        float dx = t[9] - cam[0], dy = t[10] - cam[1], dz = t[11] - cam[2], d = dx * dx + dy * dy + dz * dz;
+        if (d < best[0].d) best[1] = best[0], best[0] = {d, p};
+        else if (d < best[1].d) best[1] = {d, p};
+    }
+    unsigned now = kGameTime();
+    if (watch && !g_watchPed && now > 15000) {
+        float d = 100;
+        for (int i = 0; peds && i < count; i++) {
+            uintptr_t p = peds + i * 0x54, c = *(uintptr_t*)p;
+            if (!c || !(*(uint16_t*)(p + 8) & 1) || (watchMove >= 0 && *(int8_t*)(c + 7) != watchMove)) continue;
+            const float* t = kBoneMatrix0(c);
+            float dx = t[9] - cam[0], dz = t[11] - cam[2];
+            if (dx * dx + dz * dz < d) d = dx * dx + dz * dz, g_watchPed = p;
+        }
+        if (g_watchPed) {
+            g_watchChar = *(uintptr_t*)g_watchPed;
+            g_watchX = kBoneMatrix0(g_watchChar) + 9;
+            Log("pedw: watching ped %08lx (move %d)", (unsigned long)g_watchPed, *(int8_t*)(g_watchChar + 7));
+            AddVectoredExceptionHandler(1, &WatchHandler);
+            RaiseException(kArmWatch, 0, 0, nullptr);
+        }
+    }
+    if (g_watchX) {
+        uintptr_t c = g_watchChar;
+        Log("pedwf %u fr %d frac %.2f x %.4f", now, *(int16_t*)(c + 0x1c), *(float*)(c + 0x18), *g_watchX);
+    }
+    for (const Near& n : best) {
+        if (!n.p || n.d > 400) continue;  // within 20 units
+        uintptr_t c = *(uintptr_t*)n.p, q = *(uintptr_t*)(n.p + 0xc);
+        const float* t = kBoneMatrix0(c);
+        const float* leg = kBoneMatrix(c, 2);
+        const float* f = (const float*)(c + 0xc0);
+        Log("pedf %u %08lx move %d fr %d frac %.2f msf %d face %.3f %.3f %.3f torso %.3f %.3f %.3f leg %.3f %.3f %.3f "
+            "av %d phys %d state %d slot %d e8 %08lx m %p",
+            now, (unsigned long)n.p, *(int8_t*)(c + 7), *(int16_t*)(c + 0x1c), *(float*)(c + 0x18),
+            *(int16_t*)(c + 0x1e), f[0], f[1], f[2], t[9], t[10], t[11], leg ? leg[9] : 0.f, leg ? leg[10] : 0.f,
+            leg ? leg[11] : 0.f, q ? *(int*)(q + 0x18) : -1, (*(uint8_t*)(c + 0x14) & 0x10) != 0, *(int*)(n.p + 0x10),
+            *(int8_t*)(c + 4), (unsigned long)*(uint32_t*)(c + 0xe8), (const void*)t);
+    }
+}
+
 void StartTests() {
     AddVectoredExceptionHandler(0, &CrashLogger);
     if (Env("C2HD_GAMELOG") == "1") {
@@ -233,6 +377,23 @@ void StartTests() {
         static const uint8_t prologue[6] = {0x81, 0xec, 0x28, 0x01, 0x00, 0x00};  // sub esp, 0x128
         o_SetPedMove = (SetPedMoveFn)hook::Detour(0x4cbcd0, prologue, 6, (const void*)&LogSetPedMove);
         Log("test: pedestrian moves to the log: %s", o_SetPedMove ? "on" : "FAILED");
+        static const uint8_t update[12] = {0x55, 0x8b, 0xec, 0x83, 0xe4, 0xf8, 0x81, 0xec, 0xb8, 0x03, 0x00, 0x00};
+        o_PedUpdate = (void (*)())hook::Detour(0x4d3740, update, 12, (const void*)&PedFrameLog);
+        Log("test: nearest pedestrians each frame to the log: %s", o_PedUpdate ? "on" : "FAILED");
+        if (atoi(Env("C2HD_SLOWMO").c_str()) > 1) {
+            static const uint8_t clock[6] = {0x55, 0x8b, 0xec, 0x83, 0xec, 0x14};
+            o_Clock = (unsigned (*)())hook::Detour(0x51d410, clock, 6, (const void*)&Clock);
+            Log("test: slow motion clock: %s", o_Clock ? "ready" : "FAILED");
+        }
+        if (!Env("C2HD_PEDWATCH").empty()) {
+            static const uint8_t apply[5] = {0x83, 0xec, 0x4c, 0x53, 0x55};
+            static const uint8_t facing[6] = {0x81, 0xec, 0x40, 0x01, 0x00, 0x00};
+            static const uint8_t ground[5] = {0x83, 0xec, 0x18, 0x53, 0x55};
+            o_ApplyFrame = (CharFn)hook::Detour(0x407b30, apply, 5, (const void*)&ApplyFrame);
+            o_SetFacing = (CharFn)hook::Detour(0x40a730, facing, 6, (const void*)&SetFacing);
+            o_GroundSnap = (CharFn)hook::Detour(0x40b0a0, ground, 5, (const void*)&GroundSnap);
+            Log("test: torso writers watched: %s", o_ApplyFrame && o_SetFacing && o_GroundSnap ? "on" : "FAILED");
+        }
     }
     if (Env("C2HD_TEST_EXIT") == "window") {
         bool ok = hook::Import(hook::FindImport(nullptr, "USER32.dll", "CreateWindowExA"), &ExitAtCreateWindow,
