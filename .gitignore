@@ -4,6 +4,7 @@ testrun2/
 testrun3/
 testrun-*/
 testgame/
+testgog/
 
 # Ghidra project and its exported caches (regenerated)
 re/ghidra/

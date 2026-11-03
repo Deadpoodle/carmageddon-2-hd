@@ -1,8 +1,10 @@
 # Carmageddon II HD
 
-An unofficial patch for **Carmageddon II: Carpocalypse Now** (the Steam release) that makes the 1998 game run well on a modern PC. It brings modern resolutions with ultrawide support, modern controls and controller support, sharper visuals and network play that works on today's Windows.
+An unofficial patch for **Carmageddon II: Carpocalypse Now** (the Steam and GOG.com releases) that makes the 1998 game run well on a modern PC. It brings modern resolutions with ultrawide support, modern controls and controller support, sharper visuals and network play that works on today's Windows.
 
 It is a binary patch: a small `dinput.dll` that the game loads at start-up and that changes the game in memory. No game file is modified, and no game data is included here: you need your own copy of the game.
+
+It is tested with the Steam and GOG.com releases. Both ship the same game (`CARMA2_HW.EXE` 1.02a, identical byte for byte, as are its renderer drivers); only their CD-music players differ, and the patch plays the music with either.
 
 **[Download the latest release](https://github.com/Deadpoodle/carmageddon-2-hd/releases/latest)** (`carma2hd.zip`), then see [Installing](#installing), or [Steam Deck and Linux](#steam-deck-and-linux) for a one-line install there.
 
@@ -77,7 +79,7 @@ The release zip, [`carma2hd.zip`](https://github.com/Deadpoodle/carmageddon-2-hd
 2. Download [dgVoodoo2](https://github.com/dege-diosg/dgVoodoo2/releases) (tested with 2.87.5). From its `MS\x86` folder, take `DDraw.dll` and `D3DImm.dll`.
 3. Put `dinput.dll` and `dgVoodoo.conf` from the zip, and dgVoodoo2's `DDraw.dll` and `D3DImm.dll`, in the game's folder, next to `CARMA2_HW.EXE`.
    - To keep the store's copy untouched, copy the whole game folder somewhere else first and install there.
-4. Start the game as usual: the store's Play button works. The first start writes `Carma2HD.ini` next to the game, with every setting explained.
+4. Start the game as usual: Steam's Play button, GOG Galaxy or the GOG shortcut all work. The first start writes `Carma2HD.ini` next to the game, with every setting explained.
 
 To remove the patch, delete those four files and `Carma2HD.ini`.
 
@@ -110,6 +112,8 @@ curl -fsSL https://raw.githubusercontent.com/Deadpoodle/carmageddon-2-hd/main/to
 ```
 
 Without internet on the Deck, copy `carma2hd.zip` over, extract it, and run `bash install-steamdeck.sh` from the extracted folder: it then installs that copy instead. dgVoodoo2 still has to be downloaded once.
+
+**The GOG release on Linux** (through Heroic, Lutris or another Wine launcher): the script is for Steam's copy, so install by hand as on Windows, then add `WINEDLLOVERRIDES` with the value `dinput,ddraw,d3dimm=n,b` to the game's environment variables in the launcher.
 
 **On the Deck:**
 - **Screen:** `Resolution=auto` picks the Deck's 1280x800. Its 16:10 shape gets a 768x480 Hor+ view, with the HUD spread across the width. Docked, auto picks the external display's resolution instead.
