@@ -1,5 +1,6 @@
 // The D3D renderer driver (D3D.BDD) as BRender has mapped it. Found once, by
-// the mode picker's code signature, before anything patches it, and cached.
+// the mode picker's code signature, before anything patches it, and cached;
+// and its texture cache, enlarged for the features that need bigger textures.
 #include "driver.h"
 
 #include <windows.h>
@@ -7,6 +8,7 @@
 #include <cstring>
 
 #include "game.h"
+#include "hook.h"
 
 namespace driver {
 namespace {
@@ -51,6 +53,30 @@ uint8_t* FindDriver() {
 uint8_t* Base() {
     static uint8_t* base = FindDriver();
     return base;
+}
+
+// Entries are {batches, work, slots per batch, w, h, allocated}; the slot
+// builder (0x10004610) makes batches x per-batch surfaces of w x h, and a
+// texture binds to the slot size that fits it best (0x10003bd0), halving until
+// one does, so the 16x16 class must stay. 0x10004610 copies batches into work
+// and counts allocated itself: only the first five fields are set. The slot
+// array has room for 2048 slots; this makes 544 (64 + 160 + 126 + 96 + 2 + 32),
+// about 15 MB of 16-bit surfaces.
+bool PatchTextureCache() {
+    static int state = -1;
+    if (state >= 0) return state == 1;
+    state = 0;
+    uint8_t* base = Base();
+    if (!base) return false;
+    const uintptr_t sq128 = (uintptr_t)base + 0x158e0, wide128 = (uintptr_t)base + 0x15910;
+    static const uint32_t sqWas[5] = {2, 0, 6, 128, 128}, sqNow[5] = {16, 0, 6, 128, 128};
+    static const uint32_t wideWas[5] = {1, 0, 2, 128, 64}, wideNow[5] = {16, 0, 2, 256, 256};
+    // Both or neither.
+    if (!hook::Matches(sq128, (const uint8_t*)sqWas, 20) || !hook::Matches(wide128, (const uint8_t*)wideWas, 20))
+        return false;
+    state = hook::Patch(sq128, (const uint8_t*)sqWas, (const uint8_t*)sqNow, 20) &&
+            hook::Patch(wide128, (const uint8_t*)wideWas, (const uint8_t*)wideNow, 20);
+    return state == 1;
 }
 
 }  // namespace driver

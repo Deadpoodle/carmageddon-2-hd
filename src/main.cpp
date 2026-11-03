@@ -21,6 +21,7 @@
 #include "options.h"
 #include "log.h"
 #include "settings.h"
+#include "sharptext.h"
 
 namespace {
 
@@ -162,6 +163,7 @@ void Start() {
     controller::Install();
     display::Install();
     movie::Install();
+    sharptext::Install();
     music::Install();
     StartTests();
 }

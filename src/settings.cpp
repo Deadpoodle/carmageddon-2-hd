@@ -36,6 +36,8 @@ const char* kDefaultIni =
     "FrameRate=auto\r\n"
     "; Cutscenes: enhanced (enlarged 4x with Lanczos and lightly sharpened) or original\r\n"
     "Movies=enhanced\r\n"
+    "; Text and HUD art: on (their textures enlarged 2x with Scale2x, so they stay crisp at high resolutions) or off\r\n"
+    "SharpText=on\r\n"
     "\r\n"
     "[Controls]\r\n"
     "; classic = the game's own keys (its default set drives on the numeric keypad)\r\n"

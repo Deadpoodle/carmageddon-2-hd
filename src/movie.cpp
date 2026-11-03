@@ -6,9 +6,9 @@
 // screen. Here the tiles are allocated as RGB565 at 64k x 64k, the quads' UV
 // inset is set to half a texel of the new size, and the per-frame copy is
 // replaced by ours: palette -> RGB, Lanczos-2 to 320k x 192k, sharpen, pack.
-// 4x needs the driver's texture cache to have 256x256 slots (its table at
-// RVA 0x15910 is turned into 16 of them); without that, 2x fits the existing
-// 128x128 slots. The game's mesh, render, timing and audio are untouched.
+// 4x needs the driver's texture cache to have 256x256 slots (its 128x64
+// entry, RVA 0x15910, becomes 32 of them: driver::PatchTextureCache); without
+// that, 2x fits the existing 128x128 slots. The game's mesh, render, timing and audio are untouched.
 #include "movie.h"
 
 #include <windows.h>
@@ -42,11 +42,8 @@ constexpr int kW = 320, kH = 192;
 
 void PatchSlots(const char* name) {
     if (g_slotsPatched || strcmp(name, "DirectDrawCreate") != 0) return;
-    uint8_t* base = driver::Base();
-    if (!base) return;
-    static const uint8_t was[20] = {1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0x80, 0, 0, 0, 0x40, 0, 0, 0};
-    static const uint8_t now[20] = {8, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0};
-    g_slotsPatched = hook::Patch((uintptr_t)base + 0x15910, was, now, 20);
+    if (!driver::Base()) return;
+    g_slotsPatched = driver::PatchTextureCache();  // shared with sharptext.cpp
     Log("movie: driver texture cache 256x256 slots: %s", g_slotsPatched ? "ok" : "not patched (2x)");
 }
 
