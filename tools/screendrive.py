@@ -295,6 +295,13 @@ for raw in open(steps_file):
     elif op == "shot":
         guard()
         ImageGrab.grab(bbox=(0, 0, sw, sh)).save(os.path.join(out, a[0] + ".png"))
+        # The same moment through DXGI desktop duplication (ffmpeg's ddagrab),
+        # which also sees exclusive full-screen output that the GDI grab can
+        # miss (the unpatched game's Glide through nGlide).
+        ff = os.environ.get("FFMPEG", "ffmpeg")
+        subprocess.run([ff, "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
+                        "ddagrab=output_idx=0:framerate=10:draw_mouse=0", "-frames:v", "1", "-vf",
+                        "hwdownload,format=bgra", os.path.join(out, a[0] + "_dxgi.png")], timeout=20)
         log(f"shot {a[0]}")
     elif op == "record":
         guard()
