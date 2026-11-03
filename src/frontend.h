@@ -17,6 +17,8 @@ bool InKeyCapture();
 // ScreenToClient, the mapping above) in the client of an emulated full-screen
 // window, the output size. Before the game runs.
 void InstallTestCursor();
+// Diagnostic: log the main menu's outcome (game state) each time it returns.
+void InstallFlowLog();
 // The cursor at a point in 640x480 menu space...
 void SetVirtualCursor(int x, int y);
 // ...or at a client pixel.

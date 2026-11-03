@@ -6,7 +6,8 @@ runs a list of steps with real mouse and keyboard input (SendInput). Every
 input first checks that the game's own window is the foreground window; if
 anything else is in front, the run stops without sending anything.
 
-usage: python -E -P tools/screendrive.py <game dir> <out dir> <steps file>
+usage: python -E -P tools/screendrive.py <game dir> <out dir> <steps file> [game args]
+(game args default to -nocutscenes; "none" for none)
 
 Windows only lets the process that sent the last input bring a window to the
 front, so the run nudges the mouse by a pixel and then brings the game's
@@ -17,11 +18,20 @@ Steps, one per line ("#" comments):
   front                    bring the game's window to the front (once it exists)
   wait <s>                 sleep
   move <x> <y>             cursor to a screen pixel (absolute), then log where it really is
-  menu <x> <y>             cursor to a point in 640x480 menu space (16:9 wide frame, centred)
+  menu <x> <y> [4:3]       cursor to a point in 640x480 menu space (16:9 wide frame, centred;
+                           4:3 = a 640x480 picture at full height, as the unpatched game shows)
   click                    left click
   key <name> [ms]          press a key (RETURN, ESCAPE, F4, UP ... or a letter or digit)
   altf4                    Alt+F4
+  alttab                   Alt+Tab away from the game (no input is sent until "front" again;
+                           no screenshot is taken of whatever is then in front). Windows'
+                           task switcher ignores a synthesized Alt+Tab over the full-screen game,
+                           so this only logs whether it switched; "away" switches for real
+  away                     give the focus to the taskbar (the game loses it, as with Alt+Tab)
   shot <name>              screenshot of the primary screen to <out dir>/<name>.png
+  record <s> <name>        start recording the primary screen for s seconds to <out dir>/<name>.mp4
+                           (ffmpeg's DXGI capture, 1920 wide, 60 fps; ffmpeg from FFMPEG or PATH),
+                           while the steps carry on
   expect_exit <s>          wait up to s seconds for the game to end; log how long it took
 """
 import ctypes
@@ -41,9 +51,12 @@ except OSError:
     user32.SetProcessDPIAware()
 
 game, out, steps_file = sys.argv[1:4]
+game_args = (sys.argv[4] if len(sys.argv) > 4 else "-nocutscenes").split()
+if game_args == ["none"]:
+    game_args = []
 os.makedirs(out, exist_ok=True)
 VK = {"RETURN": 0x0D, "ESCAPE": 0x1B, "F4": 0x73, "MENU": 0x12, "UP": 0x26, "DOWN": 0x28, "LEFT": 0x25,
-      "RIGHT": 0x27, "SPACE": 0x20, "F1": 0x70}
+      "RIGHT": 0x27, "SPACE": 0x20, "F1": 0x70, "TAB": 0x09}
 
 
 class MOUSEINPUT(ctypes.Structure):
@@ -96,7 +109,7 @@ def nudge():
         i = INPUT(type=0)
         i.mi = MOUSEINPUT(d, 0, 0, 0x0001, 0, 0)  # relative MOVE
         send(i)
-        time.sleep(0.05)
+        time.sleep(0.07)
 
 
 def game_window():
@@ -164,6 +177,13 @@ def move(x, y):
 
 def click():
     guard()
+    # The menus read the mouse only in "mouse mode" (0x79ecb8), which entering
+    # a screen switches off (Main 0x469a40, newgame 0x4671a0) and only cursor
+    # movement switches on (0x43e0a0, each menu frame). A hand always moves
+    # onto a button; a script that moved before the screen was entered must
+    # move again, so: a pixel out and back, a few menu frames (48 fps) apart.
+    nudge()
+    time.sleep(0.1)
     down, up = INPUT(type=0), INPUT(type=0)
     down.mi = MOUSEINPUT(0, 0, 0, 0x0002, 0, 0)
     up.mi = MOUSEINPUT(0, 0, 0, 0x0004, 0, 0)
@@ -179,24 +199,34 @@ def key(vk, ms=120, alt=False):
     if alt:
         seq.append((VK["MENU"], 0))
     seq.append((vk, 0))
+    gap = 0.2 if alt else 0.03  # Alt combinations at a person's pace (the task switcher needs it)
     for k, _ in seq:
         i = INPUT(type=1)
         i.ki = KEYBDINPUT(k, user32.MapVirtualKeyW(k, 0), 0, 0, 0)
         send(i)
-        time.sleep(0.03)
+        time.sleep(gap)
     time.sleep(ms / 1000)
     for k, _ in reversed(seq):
         i = INPUT(type=1)
         i.ki = KEYBDINPUT(k, user32.MapVirtualKeyW(k, 0), 0x0002, 0, 0)
         send(i)
-        time.sleep(0.03)
+        time.sleep(gap)
 
+
+# Windows' blank screensaver (not a locked one) takes the input desktop after
+# two idle minutes, and nothing can be shown or sent while it runs: end it, as
+# a hand on the mouse would.
+r = subprocess.run(["tasklist", "/FI", "IMAGENAME eq scrnsave.scr", "/NH"], capture_output=True, text=True)
+if "scrnsave.scr" in r.stdout:
+    subprocess.run(["taskkill", "/F", "/IM", "scrnsave.scr"], capture_output=True)
+    time.sleep(2)
+    print("ended the blank screensaver", flush=True)
 
 sw, sh = user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)  # primary screen
 env = dict(os.environ, C2HD_HEADLESS="3", C2HD_QUIT=os.environ.get("C2HD_QUIT", "180"))
 start = time.time()
 open(os.path.join(out, "drive.log"), "w").close()
-proc = subprocess.Popen([os.path.join(game, "CARMA2_HW.EXE"), "-nocutscenes"], cwd=game, env=env)
+proc = subprocess.Popen([os.path.join(game, "CARMA2_HW.EXE")] + game_args, cwd=game, env=env)
 log(f"started pid {proc.pid}, primary screen {sw}x{sh}")
 threading.Thread(target=keep_awake, daemon=True).start()
 
@@ -212,9 +242,10 @@ for raw in open(steps_file):
     elif op == "move":
         move(int(a[0]), int(a[1]))
     elif op == "menu":
-        s = min(sw / 854, sh / 480)
-        ox, oy = (sw - 854 * s) / 2, (sh - 480 * s) / 2
-        move(int(ox + (int(a[0]) + 107 + 0.5) * s), int(oy + (int(a[1]) + 0.5) * s))
+        fw, xo = (640, 0) if a[2:] == ["4:3"] else (854, 107)
+        s = min(sw / fw, sh / 480)
+        ox, oy = (sw - fw * s) / 2, (sh - 480 * s) / 2
+        move(int(ox + (int(a[0]) + xo + 0.5) * s), int(oy + (int(a[1]) + 0.5) * s))
     elif op == "click":
         click()
     elif op == "key":
@@ -224,6 +255,17 @@ for raw in open(steps_file):
             continue
         key(vk, int(a[1]) if len(a) > 1 else 120)
         log(f"key {a[0]}")
+    elif op == "alttab":
+        key(VK["TAB"], 80, alt=True)
+        time.sleep(1)
+        log(f"Alt+Tab: game {'still' if game_in_front() else 'no longer'} in front")
+    elif op == "away":
+        guard()
+        nudge()
+        user32.SetForegroundWindow(user32.FindWindowW("Shell_TrayWnd", None))
+        time.sleep(1)
+        log(f"away: game {'still' if game_in_front() else 'no longer'} in front, "
+            f"{'minimized' if user32.IsIconic(game_window()) else 'not minimized'}")
     elif op == "altf4":
         t = time.time()
         key(VK["F4"], 80, alt=True)
@@ -232,6 +274,14 @@ for raw in open(steps_file):
         guard()
         ImageGrab.grab(bbox=(0, 0, sw, sh)).save(os.path.join(out, a[0] + ".png"))
         log(f"shot {a[0]}")
+    elif op == "record":
+        guard()
+        ff = os.environ.get("FFMPEG", "ffmpeg")
+        vf = "hwdownload,format=bgra,scale=1920:-2,format=yuv420p"
+        subprocess.Popen([ff, "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
+                          "ddagrab=output_idx=0:framerate=60:draw_mouse=0", "-t", a[0], "-vf", vf, "-c:v", "libx264",
+                          "-preset", "veryfast", "-crf", "20", os.path.join(out, a[1] + ".mp4")])
+        log(f"recording {a[0]} s to {a[1]}.mp4")
     elif op == "expect_exit":
         t = time.time()
         try:

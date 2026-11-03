@@ -256,6 +256,20 @@ void SetTestCursor(int x, int y) {
     g_testX = x;
 }
 
+// Diagnostic (C2HD_FLOWLOG=1): the main menu's outcome as the race flow sees it.
+void (*o_MainMenu)();
+void MainMenuLogged() {
+    int inProgress = *(volatile int*)0x75bbac;
+    o_MainMenu();
+    Log("flow: main menu done: game in progress %d -> state %d (0x75bc24), g_fe_exit %d", inProgress,
+        *(volatile int*)0x75bc24, *(volatile int*)0x6883a8);
+}
+
+void InstallFlowLog() {
+    o_MainMenu = (void (*)())0x494540;
+    Log("flow log: %s", hook::Redirect(0x503d68, 0xe8, 0x494540, (const void*)&MainMenuLogged) ? "on" : "FAILED");
+}
+
 void InstallTestCursor() {
     bool ok = hook::Import(hook::FindImport(nullptr, "USER32.dll", "GetCursorPos"), &h_GetCursorPos, &o_GetCursorPos) &&
               hook::Import(hook::FindImport(nullptr, "USER32.dll", "ScreenToClient"), &h_ScreenToClient,

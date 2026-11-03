@@ -125,6 +125,7 @@ LONG CALLBACK CrashLogger(EXCEPTION_POINTERS* ep) {
 
 void StartTests() {
     AddVectoredExceptionHandler(0, &CrashLogger);
+    if (Env("C2HD_FLOWLOG") == "1") frontend::InstallFlowLog();
     if (Env("C2HD_TEST_EXIT") == "window") {
         bool ok = hook::Import(hook::FindImport(nullptr, "USER32.dll", "CreateWindowExA"), &ExitAtCreateWindow,
                                &real_CreateWindowExA);
