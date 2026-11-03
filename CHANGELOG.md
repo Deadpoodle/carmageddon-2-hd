@@ -4,6 +4,10 @@ Carmageddon II HD follows [semantic versioning](https://semver.org/). Until a fi
 
 The game itself is the Steam release, which labels itself `v1.02a`. It is the same build as the official "Super Patch V2.0" (both game exes were built on 30 November 1998). Steam's copy has its CD protection removed, plus an extra import for its CD-music player.
 
+## 0.17.0 (2026-11-03)
+- The host's lobby shows the address to give friends joining over the internet, and this PC's address on the home network. The address comes from the router (UPnP), or from a web service if the router doesn't say (`[Network] UPnP`, `PublicIPService`).
+- Hosting opens the game's port on the router (UPnP) and closes it again afterwards, so most hosts no longer need to forward it by hand. The lobby says whether it worked (`[Network] OpenPort`).
+
 ## 0.16.1 (2026-11-03)
 - The minimap shows the right part of the map. On wide screens it was cut from a spot about a sixth of the map to the right, so it showed the wrong area, and near the right of a track it went black or showed noise.
 - No crash on the way back to the menus after a long race. The original game stops a "no slot" power-up effect without checking for it, and after a long race the memory it then touched could be non-zero.

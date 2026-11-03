@@ -77,6 +77,7 @@ decltype(&::WSAGetLastError) w_WSAGetLastError;
 decltype(&::WSASetLastError) w_WSASetLastError;
 
 int g_basePort = 47700;
+std::atomic<int> g_boundPort;  // the UDP port the game's socket got (0 before)
 bool g_loopback;            // test runs: loopback only
 bool g_noBroadcast;         // test runs (C2HD_NET_NOBROADCAST=1): reach peers only by JoinAddress
 // [Network] JoinAddress (or the Network screen's field), resolved off the
@@ -217,6 +218,7 @@ int WINAPI h_bind(SOCKET s, const sockaddr* name, int len) {
         a.sin_port = htons((u_short)(g_basePort + i));
         a.sin_addr.s_addr = htonl(g_loopback ? INADDR_LOOPBACK : INADDR_ANY);
         if (w_bind(s, (sockaddr*)&a, sizeof a) == 0) {
+            g_boundPort = g_basePort + i;
             Log("net: IPX socket %04x on UDP port %d (%s)", ntohs(ipx->socket), g_basePort + i,
                 g_loopback ? "loopback, test" : "all interfaces");
             return 0;
@@ -447,6 +449,9 @@ void SetJoinAddress(const std::string& text) {
         g_joinState = text.empty() ? kJoinNone : kJoinResolving;
     }
 }
+
+int BoundPort() { return g_boundPort; }
+bool Loopback() { return g_loopback; }
 
 JoinState GetJoinState(uint8_t host[6]) {
     uint64_t node = g_joinHost;

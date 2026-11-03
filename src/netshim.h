@@ -21,4 +21,9 @@ void SetJoinAddress(const std::string& text);
 enum JoinState { kJoinNone, kJoinResolving, kJoinInvalid, kJoinNotFound, kJoinLooking, kJoinAnswered };
 JoinState GetJoinState(uint8_t host[6]);
 
+// The UDP port the game's socket is on (0 before it binds), and whether this
+// is a test run on loopback only.
+int BoundPort();
+bool Loopback();
+
 }  // namespace netshim

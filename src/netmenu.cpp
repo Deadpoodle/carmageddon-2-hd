@@ -33,6 +33,7 @@
 #include "hook.h"
 #include "log.h"
 #include "netshim.h"
+#include "publicaddr.h"
 #include "settings.h"
 
 namespace netmenu {
@@ -56,6 +57,7 @@ int* const kFocus = (int*)0x688770;
 uintptr_t* const kListGames = (uintptr_t*)0x688718;  // 6 x {game details*, time listed}; details+6 = host node
 int* const kSelectedGame = (int*)0x688760;
 int* const kMouseMode = (int*)0x79ecb8;  // focus follows the cursor; a key clears it, cursor movement sets it
+int* const kNetMode = (int*)0x68b918;    // gNet_mode: 0 none, 2 host, 3 client
 
 // The game's text-entry state (0x466ec0 starts and ends it for the driver name).
 int* const kEditing = (int*)0x68b858;
@@ -273,6 +275,67 @@ void Tick() {
 int __fastcall Update(void* s) {
     int r = kNetworkUpdate(s);
     Tick();
+    publicaddr::HostingChanged(*kNetMode == 2);
+    return r;
+}
+
+// ---------------------------------------------------------------------------
+// The host's lobby (NetSync 0x61bad0, 28 items): three lines at the bottom
+// left, just above ABORT GAME and below the last of the 12 player slots (y
+// 382): the address to give friends, the port's state on the router and the
+// LAN address (publicaddr.cpp). They use the lobby's green text font (0): the
+// small font 11 has no full stop, so addresses read "203 0 113 5". Hidden for
+// the players who joined.
+
+uint8_t* const kLobby = (uint8_t*)0x61bad0;
+const ScreenFn kLobbyEnter = (ScreenFn)0x473610, kLobbyUpdate = (ScreenFn)0x473870;
+constexpr int kLobbyItems = 28, kLobbyX = 110, kLobbyY = 395, kLobbyLine = 12, kLobbyFont = 0;
+
+Item& LobbyAt(int i) { return *(Item*)(kLobby + kItems + i * kItemSize); }
+
+void LobbyLine(int i, const std::string& text) {
+    Item& it = LobbyAt(kLobbyItems + i);
+    it.visible = *kNetMode == 2;
+    if (strcmp(it.name, text.c_str()) != 0) snprintf(it.name, sizeof it.name, "%s", text.c_str());
+}
+
+// Test runs: C2HD_LOBBY_XY=x,y places the lines (menu space),
+// C2HD_LOBBY_FONT=font,line picks their font and spacing, and
+// C2HD_LOBBY_SAMPLE=1 fills them with sample text, for agreeing the layout.
+bool g_lobbySample;
+
+int __fastcall LobbyEnter(void* s) {
+    int r = kLobbyEnter(s);
+    if (*(int32_t*)(kLobby + kCount) == kLobbyItems) {
+        int x = kLobbyX, y = kLobbyY, font = kLobbyFont, line = kLobbyLine;
+        char v[32] = "";
+        if (GetEnvironmentVariableA("C2HD_LOBBY_XY", v, sizeof v)) sscanf(v, "%d,%d", &x, &y);
+        if (GetEnvironmentVariableA("C2HD_LOBBY_FONT", v, sizeof v)) sscanf(v, "%d,%d", &font, &line);
+        g_lobbySample = GetEnvironmentVariableA("C2HD_LOBBY_SAMPLE", v, sizeof v) && v[0] == '1';
+        for (int i = 0; i < 3; i++) {
+            Item& it = LobbyAt(kLobbyItems + i);
+            Fill(it, kTextOwn, "", font, font, x, y + i * line, 0, kStub);
+            it.wrap = 1;  // a fixed width (see the status line above)
+            it.w = 600 - x;
+            it.h = line;
+        }
+        *(int32_t*)(kLobby + kCount) = kLobbyItems + 3;
+        Log("netmenu: lobby address lines appended");
+    }
+    publicaddr::HostingChanged(*kNetMode == 2);
+    return r;
+}
+
+int __fastcall LobbyUpdate(void* s) {
+    int r = kLobbyUpdate(s);
+    publicaddr::HostingChanged(*kNetMode == 2);
+    std::string address, port, lan;
+    publicaddr::Lines(&address, &port, &lan);
+    if (g_lobbySample) address = "YOUR ADDRESS: 203.0.113.5", port = "PORT 47700 OPENED ON YOUR ROUTER",
+                       lan = "ON YOUR LAN: 192.168.1.20";
+    LobbyLine(0, address);
+    LobbyLine(1, port);
+    LobbyLine(2, lan);
     return r;
 }
 
@@ -304,6 +367,16 @@ void Install() {
     }
     *enter = (uint32_t)(uintptr_t)&Enter;
     *update = (uint32_t)(uintptr_t)&Update;
+    uint32_t* lobbyEnter = (uint32_t*)(kLobby + kEnter);
+    uint32_t* lobbyUpdate = (uint32_t*)(kLobby + kUpdate);
+    if (*lobbyEnter == (uint32_t)(uintptr_t)kLobbyEnter && *lobbyUpdate == (uint32_t)(uintptr_t)kLobbyUpdate &&
+        *(int32_t*)(kLobby + kCount) == kLobbyItems) {
+        *lobbyEnter = (uint32_t)(uintptr_t)&LobbyEnter;
+        *lobbyUpdate = (uint32_t)(uintptr_t)&LobbyUpdate;
+    } else {
+        Log("netmenu: lobby screen not as expected; no address lines");
+    }
+    publicaddr::Install();
     Log("netmenu: installed");
 }
 

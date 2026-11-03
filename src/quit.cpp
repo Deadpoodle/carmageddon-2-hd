@@ -27,6 +27,7 @@
 
 #include "hook.h"
 #include "log.h"
+#include "publicaddr.h"
 
 namespace quit {
 namespace {
@@ -141,6 +142,11 @@ HHOOK WINAPI SetWindowsHookExA_NoAltTabBlock(int id, HOOKPROC fn, HINSTANCE mod,
 
 // The shutdown's message pump: what is waiting, without waiting for more.
 void ShutdownDrain() {
+    static bool once;
+    if (!once) {
+        once = true;
+        publicaddr::Shutdown();  // remove the router's port mapping while hosting
+    }
     MSG m;
     while (PeekMessageA(&m, nullptr, 0, 0, PM_REMOVE))
         if (m.message != WM_QUIT) {

@@ -43,6 +43,7 @@ Versions and what changed in each: [CHANGELOG.md](CHANGELOG.md). The main menu s
 **Network**
 - LAN games on modern Windows. The game only speaks IPX, which Windows no longer has; the patch carries it over UDP.
 - Join a game over the internet by typing the host's address on the Network screen. Three or more players work too: the host's copy passes on what the joining players send each other.
+- The host's lobby shows the address to give friends, and opens the game's port on the router (UPnP) while hosting.
 - Several copies on one PC, for testing.
 
 **Fixes**
@@ -148,9 +149,17 @@ Everyone, host or not: the first time you open the Network screen, Windows asks 
 2. Pick a game type and track on the left, then press **HOST**.
 3. The lobby opens. Wait for the other players' names to appear, then press **START**.
 
-To host **over the internet**, three extra things are needed:
-- **Forward UDP port 47700** on your router to this PC. Your router's manual or admin page calls this "port forwarding". The port can be changed with `[Network] Port`.
-- **Give the joining players your public IP address.** Searching "what is my IP" in a web browser shows it.
+While you host, three lines above **ABORT GAME** in the lobby show what friends over the internet need:
+
+| Line | Meaning |
+|---|---|
+| YOUR ADDRESS: 203.0.113.5 | Your public address: give it to the joining players. A port follows it if you changed `[Network] Port`. *FINDING YOUR ADDRESS...* shows for the few seconds the lookup takes; *NOT FOUND* means neither your router nor the web service answered. |
+| PORT 47700 OPENED ON YOUR ROUTER | The game asked your router to open its port (UPnP) and the router agreed. Nothing else to do. The port is closed again when you stop hosting or quit. |
+| FORWARD UDP PORT 47700 ON ROUTER | Your router doesn't do UPnP, has it turned off, or refused. Forward the port by hand: your router's manual or admin page calls this "port forwarding". Point it at the address on the next line. |
+| DOUBLE NAT: FRIENDS MAY NOT CONNECT | Your router's own internet address is a private one: there's another router or your provider's network in front of it. Friends probably can't reach you, even with the port forwarded; one of them may have better luck hosting. |
+| ON YOUR LAN: 192.168.1.20 | This PC's address on your home network. Players on the same network don't need it: they see your game in the list. |
+
+The address comes from your router first (UPnP), and from a web service (api.ipify.org) if the router doesn't say. All of this can be turned off; see the settings below.
 
 ### Joining over a LAN
 
@@ -179,7 +188,7 @@ To host **over the internet**, three extra things are needed:
 
 **JOIN stays greyed out until the game list has a game in it.** That's the original game's rule. If it stays grey:
 - check the host is on the Network screen and has pressed HOST;
-- check the host has forwarded UDP port 47700;
+- check the host's lobby says the port is open, or that the host has forwarded UDP port 47700;
 - check the address is right.
 
 Press **Esc** while typing to cancel. Press **Return** on an empty box to clear the address. Games on your LAN still show up while an address is set. The address is saved, as `[Network] JoinAddress`.
@@ -196,6 +205,9 @@ Press **Esc** while typing to cancel. Press **Return** on an empty box to clear 
 | `Port` | 47700 | UDP port. The first copy on a PC uses it, and further copies the next ones, up to Port+7. |
 | `JoinAddress` | (empty) | The address the IP box sets. |
 | `Transport` | udp | `udp` is the patch; `ipxwrapper` is the store's original, LAN only. |
+| `UPnP` | 1 | 1 = ask the router for the public address (and to open the port) while hosting; 0 = don't talk to the router. |
+| `OpenPort` | 1 | 1 = ask the router to open the port while hosting; 0 = only ask for the address. |
+| `PublicIPService` | https://api.ipify.org | The web service asked for the public address when the router doesn't say. It must answer with the address as plain text. Empty = never ask one. |
 
 ## Troubleshooting
 
