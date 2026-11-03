@@ -34,6 +34,7 @@
 #include "sharptext.h"
 #include "version.h"
 #include "wrecks.h"
+#include "menukeys.h"
 
 namespace {
 
@@ -475,6 +476,7 @@ void Start() {
     music::Install();
     StartTests();
     if (netshim::Install()) netmenu::Install();  // after the test harness: tests stay on loopback
+    menukeys::Install();  // after netmenu: the lobby keys wrap its lobby update
 }
 
 }  // namespace

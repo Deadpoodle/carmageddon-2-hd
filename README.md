@@ -38,7 +38,12 @@ Versions and what changed in each: [CHANGELOG.md](CHANGELOG.md). The main menu s
 - A modern keyboard scheme (W/A/S/D or the arrows), and any action can be put on any key.
 - Xbox-style controllers through XInput, in races and in menus.
 - Pedestrians animate smoothly at high frame rates (the original game's physics undid their animation between its 40 ms ticks, which made them twitch above about 30 fps).
-- Menus work with the arrows, W/S, a controller or the mouse. That includes the Wrecks gallery after a race, which the original left to the mouse: Left/Right (A/D, the D-pad) scroll the wrecked cars, Up/Down pick BUY or OK.
+- Every menu works with the arrows, W/S, a controller or the mouse, so the game can be played with a pad alone (a Steam Deck, say). The original left several screens to the mouse:
+  - **Change Car:** Left/Right change the car, Up/Down pick OK or CANCEL, Esc (B) cancels.
+  - **Load Game:** Up/Down move along the saved games (the list scrolls), Esc (B) cancels.
+  - **Wrecks gallery** after a race: Left/Right scroll the wrecked cars, Up/Down pick BUY or OK.
+  - **Net game options:** Left/Right on Starting Credit and Target change them.
+  - **Lobby:** Esc (B) moves to ABORT GAME, and Esc again aborts.
 
 **Network**
 - LAN games on modern Windows. The game only speaks IPX, which Windows no longer has; the patch carries it over UDP.
@@ -49,6 +54,7 @@ Versions and what changed in each: [CHANGELOG.md](CHANGELOG.md). The main menu s
 **Fixes**
 - Alt+F4, and Close from the taskbar, quit the game. In the original, Alt+F4 left the game hanging, and Close left it running without a window.
 - Alt+Tab works. Windows' own compatibility fix for this game blocks it with a keyboard hook, which the patch declines. The game pauses while you're away.
+- Moving up or down the pause menu in a race no longer ends the race. In the original, landing on **Abort Race** with the keys (or wrapping round to it from QUIT GAME) aborted the race without a press of Return.
 - The time bonus at the end of a race can't go negative. In the original, if the game clock stepped back while the bonus counted up, a 32-bit overflow gave a bonus of minus millions and the race timer started climbing.
 
 All of this is on a new **HD** tab of the in-game Graphics screen (Options → Settings), or in `Carma2HD.ini`.

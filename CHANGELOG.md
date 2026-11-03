@@ -4,6 +4,10 @@ Carmageddon II HD follows [semantic versioning](https://semver.org/). Until a fi
 
 The game itself is the Steam release, which labels itself `v1.02a`. It is the same build as the official "Super Patch V2.0" (both game exes were built on 30 November 1998). Steam's copy has its CD protection removed, plus an extra import for its CD-music player.
 
+## 0.18.0 (2026-11-03)
+- Every menu works without a mouse, from the keyboard or a controller. Change Car: Left/Right change the car, Up/Down pick OK or CANCEL. Load Game: Up/Down move along the saved games and scroll the list. Network game options: Left/Right change the starting credit and target. Esc (B on a pad) leaves Change Car and Load Game; in the lobby it moves to ABORT GAME, and a second Esc aborts. The original left these to the mouse; without one, Load Game couldn't even be left.
+- Moving up or down the pause menu in a race no longer ends the race. The original activated Abort Race as soon as the keys landed on it.
+
 ## 0.17.2 (2026-11-03)
 - The car picture on the main menu no longer shows a grid of thin lines. It is six tiles, and with smoothed textures each tile's edge picked up colour from its opposite edge. The same goes for the front end's other pictures.
 

@@ -18,6 +18,7 @@
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 
@@ -438,9 +439,11 @@ void KeySweep(void (*press)(BYTE dik), BYTE dik, const char* keyName) {
         missed ? ":" : "", missing.c_str());
 }
 
+// target: an item's name, or #n for item n (for items without one).
 bool GoTo(void (*press)(BYTE dik), const char* target) {
+    int index = target[0] == '#' ? atoi(target + 1) : -1;
     for (int n = 0; n < 99; n++) {
-        if (SameName(FocusName(), target)) {
+        if (index >= 0 ? *(const volatile int*)0x688770 == index : SameName(FocusName(), target)) {
             Log("goto: %s after %d presses", target, n);
             return true;
         }
@@ -479,10 +482,23 @@ DWORD WINAPI FocusLog(void*) {
     }
 }
 
+// ...and the in-race pause menu's (FE_MainLoop(1) in RaceOptionsMenu 0x494570:
+// 0 ends the race, state 6).
+int __fastcall PauseMenuLogged(int mode) {
+    int r = ((int(__fastcall*)(int))0x46d8e0)(mode);
+    const uint8_t* screen = *(const uint8_t* const*)0x688abc;
+    Log("flow: pause menu done: %d (screen %s, its result %d), g_fe_exit %d", r, screen ? (const char*)screen : "-",
+        screen ? *(const int*)(screen + 0xb8c4) : 0, *(volatile int*)0x6883a8);
+    return r;
+}
+
 void InstallFlowLog() {
     CloseHandle(CreateThread(nullptr, 0, &FocusLog, nullptr, 0, nullptr));
     o_MainMenu = (void (*)())0x494540;
-    Log("flow log: %s", hook::Redirect(0x503d68, 0xe8, 0x494540, (const void*)&MainMenuLogged) ? "on" : "FAILED");
+    Log("flow log: %s", hook::Redirect(0x503d68, 0xe8, 0x494540, (const void*)&MainMenuLogged) &&
+                                hook::Redirect(0x4945a6, 0xe8, 0x46d8e0, (const void*)&PauseMenuLogged)
+                            ? "on"
+                            : "FAILED");
 }
 
 void InstallTestCursor() {
