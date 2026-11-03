@@ -193,7 +193,7 @@ All of these are type 0x12 ARGB4444, loaded through `LoadPixelmap 0x48ec00` by "
    - Optional: skip the rescale when a checksum of P is unchanged.
 4. **BrPixelmapFree 0x537dc0 detour:** drop the registry entry. T goes with P as a resource child. Check w/h/type/pixels on lookup, in case an address is reused.
 5. **d3d.bdd:** apply the slot-table patch from §4. Without it, 2× pages (128²) share 12 slots and thrash. 4× (256²) has no class at all and falls back to 128².
-6. **Optional:** OR 0x20000 into the HUD/font material flag immediates (§4) for bilinear filtering (L for the look; with D3D WRAP addressing, edges may bleed into the opposite side).
+6. **Optional:** OR 0x20000 into the HUD/font material flag immediates (§4) for bilinear filtering (L for the look; with D3D WRAP addressing, edges may bleed into the opposite side). Confirmed in play for the power-up icons once dgVoodoo forces filtering: lines down the quad edges; fixed by a half-texel UV inset (src/icons.cpp, 0x4d9a53).
 7. **Scaler:** xBRZ (ARGB mode) or ScaleFX for this pixel art; Lanczos only for painted art.
    - Work in straight alpha, keep the RGB of α-0 texels (fonts 0x0FFF white, HUD 0x0004 blue) so nothing fringes, and requantise to 4444 with rounding.
    - xBRZ is GPL-3: check that the patch's licence is compatible (L).

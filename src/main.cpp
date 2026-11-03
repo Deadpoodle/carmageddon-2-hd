@@ -14,6 +14,7 @@
 #include "display.h"
 #include "frontend.h"
 #include "hdtab.h"
+#include "icons.h"
 #include "headless.h"
 #include "hook.h"
 #include "input.h"
@@ -268,6 +269,7 @@ void Start() {
     display::Install();
     movie::Install();
     sharptext::Install();
+    icons::Install();
     music::Install();
     StartTests();
     if (netshim::Install()) netmenu::Install();  // after the test harness: tests stay on loopback

@@ -60,6 +60,7 @@ SetCooperativeLevel_t o_SetCooperativeLevel;
 Acquire_t o_Acquire;
 
 volatile BYTE g_script[256];  // scripted key state (0x80 = down), test runs only
+volatile int g_givePowerup = -1;  // POWERUP=n: given on the game thread's next keyboard read
 
 uintptr_t Slot(void* obj, int i) { return (uintptr_t)(*(void***)obj + i); }
 
@@ -231,6 +232,14 @@ HRESULT WINAPI h_GetDeviceState(void* dev, DWORD size, void* data) {
     if (headless::Active()) {    // test runs: the script only, never the real keyboard
         for (int i = 0; i < 256; i++) ((BYTE*)data)[i] = g_script[i];
         hr = DI_OK;
+        if (g_givePowerup >= 0 && *(uintptr_t*)0x762438) {  // the race's info, 0 outside a race
+            // GotPowerup 0x4d8d40 (ecx = car, edx = index, two stack args it pops),
+            // as its developer key 0x4d8d30 calls it; 0x75bc2c is the player's car.
+            int n = g_givePowerup;
+            g_givePowerup = -1;
+            Log("script: power-up %d", n);
+            ((int(__fastcall*)(uintptr_t, int, int, int))0x4d8d40)(0x75bc2c, n, 1, 1);
+        }
     }
     if (SUCCEEDED(hr)) {
         Translate((BYTE*)data);
@@ -289,6 +298,7 @@ struct Step {
     std::string goTo;     // GOTO=name: press Down until that item has the focus
     DWORD wait = 0;       // WAIT=s: pause (later steps' times count from the start, so a
                           // tour with long steps can use small times and WAITs)
+    int powerup = -1;     // POWERUP=n: give the player power-up n (in a race)
 };
 
 // A scripted key press as a person makes it: down for a few menu frames, then
@@ -310,6 +320,8 @@ DWORD WINAPI ScriptThread(void*) {
         if (!s.key) {
             if (s.wait) {
                 Sleep(s.wait);
+            } else if (s.powerup >= 0) {
+                g_givePowerup = s.powerup;
             } else if (s.sweepKey) {
                 frontend::KeySweep(&Press, s.sweepKey->dik, s.sweepKey->name);
             } else if (!s.goTo.empty()) {
@@ -392,6 +404,7 @@ void StartScript(const char* script) {
     // PAD=DOWN/ms holds a button of a scripted pad (test runs never read a real one).
     // KEYSWEEP[=S] presses Down (or S) round the screen and logs what it reaches;
     // GOTO=Settings presses Down until that item has the focus.
+    // POWERUP=n gives the player power-up n (a line of POWERUP.TXT, from 0).
     std::string s = script;
     size_t pos = 0;
     while (pos < s.size()) {
@@ -427,6 +440,7 @@ void StartScript(const char* script) {
                 }
             } else if (name.rfind("GOTO=", 0) == 0) st.goTo = name.substr(5);
             else if (name.rfind("WAIT=", 0) == 0) st.wait = (DWORD)(atof(name.c_str() + 5) * 1000);
+            else if (name.rfind("POWERUP=", 0) == 0) st.powerup = atoi(name.c_str() + 8);
             else if (name.rfind("PAD=", 0) == 0) {
                 static const struct {
                     const char* name;

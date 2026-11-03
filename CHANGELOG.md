@@ -4,6 +4,9 @@ Carmageddon II HD follows [semantic versioning](https://semver.org/). Until a fi
 
 The game itself is the Steam release, which labels itself `v1.02a`. It is the same build as the official "Super Patch V2.0" (both game exes were built on 30 November 1998). Steam's copy has its CD protection removed, plus an extra import for its CD-music player.
 
+## 0.14.1 (2026-11-03)
+- Power-up icons no longer show thin lines down their sides. With smoothed textures, each edge picked up colour from the opposite edge.
+
 ## 0.14.0 (2026-11-03)
 - Cutscenes fill the screen: 800x480 of a 16:9 frame instead of 640x384 (`[Visuals] MovieSize`).
 - Their black is true black. It used to show as a faint green band.
