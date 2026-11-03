@@ -91,11 +91,15 @@ DWORD WINAPI QuitThread(void* p) {
 LONG CALLBACK CrashLogger(EXCEPTION_POINTERS* ep) {
     static LONG once;
     DWORD code = ep->ExceptionRecord->ExceptionCode;
-    if (code != EXCEPTION_ACCESS_VIOLATION || InterlockedExchange(&once, 1)) return EXCEPTION_CONTINUE_SEARCH;
+    // Errors only (0xC...: access violation, stack overflow, illegal
+    // instruction...), not warnings or the debugger's and C++'s own codes.
+    if ((code & 0xF0000000) != 0xC0000000 || code == 0xE06D7363 || InterlockedExchange(&once, 1))
+        return EXCEPTION_CONTINUE_SEARCH;
     CONTEXT* c = ep->ContextRecord;
-    Log("CRASH: access violation at %p (%s address %p) eax=%08lx ebx=%08lx ecx=%08lx edx=%08lx esi=%08lx edi=%08lx "
+    Log("CRASH: exception %#lx at %p (%s address %p) eax=%08lx ebx=%08lx ecx=%08lx edx=%08lx esi=%08lx edi=%08lx "
         "ebp=%08lx esp=%08lx",
-        ep->ExceptionRecord->ExceptionAddress, ep->ExceptionRecord->ExceptionInformation[0] ? "writing" : "reading",
+        (unsigned long)code, ep->ExceptionRecord->ExceptionAddress,
+        ep->ExceptionRecord->ExceptionInformation[0] ? "writing" : "reading",
         (void*)ep->ExceptionRecord->ExceptionInformation[1], c->Eax, c->Ebx, c->Ecx, c->Edx, c->Esi, c->Edi, c->Ebp,
         c->Esp);
     // Code addresses on the stack, named by module and offset (the drivers are

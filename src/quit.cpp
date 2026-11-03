@@ -36,6 +36,8 @@ constexpr uintptr_t kClassProc = 0x51ad40;  // mov [esp+0x20], 0x51b0c0: WNDCLAS
 constexpr DWORD kGraceMs = 3000;
 HANDLE g_mainThread;  // Install runs on it (DllMain)
 
+}  // namespace
+
 // Where the main thread is: its EIP and the code addresses on its stack.
 void LogMainThread() {
     if (!g_mainThread || SuspendThread(g_mainThread) == (DWORD)-1) return;
@@ -68,6 +70,34 @@ void LogMainThread() {
         }
     }
     ResumeThread(g_mainThread);
+}
+
+namespace {
+
+// A hang: the game's window stops answering messages (the game pumps them
+// every frame, menus and races alike) for a few seconds. Then the main
+// thread's stack goes to the log, three samples a second apart, once per hang.
+HWND* const kWindow = (HWND*)0x6ad4c8;
+
+DWORD WINAPI HangWatch(void*) {
+    bool logged = false;
+    for (;;) {
+        Sleep(1000);
+        HWND hwnd = *kWindow;
+        if (!hwnd || IsIconic(hwnd)) continue;  // the game waits by design while minimised
+        DWORD_PTR r;
+        if (SendMessageTimeoutA(hwnd, WM_NULL, 0, 0, SMTO_NORMAL, 3000, &r)) {
+            logged = false;
+            continue;
+        }
+        if (logged) continue;
+        logged = true;
+        for (int i = 0; i < 3; i++) {
+            Log("hang: the game hasn't answered its window for 3 s (sample %d)", i + 1);
+            LogMainThread();
+            Sleep(1000);
+        }
+    }
 }
 
 DWORD WINAPI Guard(void*) {
@@ -105,6 +135,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
 void Install() {
     g_mainThread = OpenThread(THREAD_GET_CONTEXT | THREAD_SUSPEND_RESUME, FALSE, GetCurrentThreadId());
+    if (HANDLE t = CreateThread(nullptr, 0, &HangWatch, nullptr, 0, nullptr)) CloseHandle(t);
     // call [SendMessageA] -> add esp, 16 (its four pushed arguments); xor eax, eax
     static const uint8_t broadcast[6] = {0xff, 0x15, 0x14, 0x92, 0x58, 0x00};
     static const uint8_t none[6] = {0x83, 0xc4, 0x10, 0x33, 0xc0, 0x90};

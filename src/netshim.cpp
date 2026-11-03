@@ -73,6 +73,8 @@ bool g_noBroadcast;         // test runs (C2HD_NET_NOBROADCAST=1): reach peers o
 // game's thread: the IPv4 address | port << 32, both in network order; 0 = none.
 std::atomic<uint64_t> g_join;
 std::atomic<int> g_joinGeneration;
+std::atomic<int> g_joinState;     // JoinState, for the Network screen
+std::atomic<uint64_t> g_joinHost;  // the node that answered from the join address (6 bytes), or 0
 std::string g_joinText;  // resolved at the first bind (winsock is started by then) or when set
 uint8_t g_node[6];
 std::map<SOCKET, uint16_t> g_ipxSockets;  // our UDP socket -> its IPX socket number (net order)
@@ -106,6 +108,7 @@ DWORD WINAPI ResolveJoin(void* p) {
     bool ok = ip != INADDR_NONE && ip && port > 0 && port < 65536;
     if (req->generation == g_joinGeneration) {  // not replaced while we looked it up
         g_join = ok ? ip | (uint64_t)htons((u_short)port) << 32 : 0;
+        g_joinState = ok ? kJoinLooking : kJoinBadAddress;
         in_addr a;
         a.s_addr = ip;
         Log("net: join address %s -> %s:%d", req->text.c_str(), ok ? inet_ntoa(a) : "not resolved", port);
@@ -116,6 +119,8 @@ DWORD WINAPI ResolveJoin(void* p) {
 
 void StartResolve() {
     g_join = 0;
+    g_joinHost = 0;
+    g_joinState = g_joinText.empty() ? kJoinNone : kJoinResolving;
     int generation = ++g_joinGeneration;
     if (g_joinText.empty()) return;
     HANDLE t = CreateThread(nullptr, 0, &ResolveJoin, new JoinRequest{g_joinText, generation}, 0, nullptr);
@@ -240,6 +245,13 @@ int WINAPI h_recvfrom(SOCKET s, char* buf, int len, int flags, sockaddr* from, i
             Log("net: peer %02x%02x%02x%02x%02x%02x at %s:%u", h->srcNode[0], h->srcNode[1], h->srcNode[2],
                 h->srcNode[3], h->srcNode[4], h->srcNode[5], inet_ntoa(src.sin_addr), ntohs(src.sin_port));
         g_peers[key] = src;
+        uint64_t join = g_join;
+        if (join && src.sin_addr.s_addr == (uint32_t)join && src.sin_port == (u_short)(join >> 32) && !g_joinHost) {
+            g_joinHost = key;
+            g_joinState = kJoinAnswered;
+            Log("net: the host at the join address answered (node %02x%02x%02x%02x%02x%02x)", h->srcNode[0],
+                h->srcNode[1], h->srcNode[2], h->srcNode[3], h->srcNode[4], h->srcNode[5]);
+        }
         int payload = n - (int)sizeof(Header);
         if (payload > len) payload = len;
         memcpy(buf, packet + sizeof(Header), payload);
@@ -338,7 +350,15 @@ void SetJoinAddress(const std::string& text) {
     } else {
         g_join = 0;
         ++g_joinGeneration;
+        g_joinHost = 0;
+        g_joinState = text.empty() ? kJoinNone : kJoinResolving;
     }
+}
+
+JoinState GetJoinState(uint8_t host[6]) {
+    uint64_t node = g_joinHost;
+    if (host) memcpy(host, &node, 6);
+    return (JoinState)g_joinState.load();
 }
 
 }  // namespace netshim
