@@ -4,6 +4,9 @@ Carmageddon II HD follows [semantic versioning](https://semver.org/). Until a fi
 
 The game itself is the Steam release, which labels itself `v1.02a`. It is the same build as the official "Super Patch V2.0" (both game exes were built on 30 November 1998). Steam's copy has its CD protection removed, plus an extra import for its CD-music player.
 
+## 0.14.3 (2026-11-03)
+- A quick key tap skips a film. The game only looked at the keyboard every half second during films, so a short press was often missed. It now looks every 50 ms. The same goes for the game's other "press any key" waits.
+
 ## 0.14.2 (2026-11-03)
 - The Wrecks gallery after a race works from the keyboard and pad. Left/Right (A/D, the D-pad) scroll the cars and Up/Down choose BUY or OK. The original screen only took the mouse.
 

@@ -214,6 +214,12 @@ void* __cdecl AllocateTile(int, int, int, void*, int) {
 }  // namespace
 
 void Install() {
+    // A key skips a film (and ends the game's other "any key" waits) through
+    // AnyKeyDown 0x482d70, which reads the keyboard only when 500 ms have
+    // passed since the last read: nothing else reads it during a film, so a
+    // press shorter than that was often missed. It now reads every 50 ms.
+    bool skip = hook::PatchU32(0x482d8a, 500, 50);
+    Log("movie: any-key checks every 50 ms %s", skip ? "on" : "hook FAILED");
     std::string mode = settings::Get("Visuals", "Movies", "enhanced");
     if (_stricmp(mode.c_str(), "enhanced") != 0) {
         Log("movie: original");
