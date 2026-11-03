@@ -164,8 +164,12 @@ BYTE TargetScan(int line) {
     return scan > 0 && scan < 256 ? (BYTE)scan : 0;
 }
 
+// Set while a menu text field (driver name, join address) takes typing: the
+// characters come from WM_CHAR, so the keys pass through untranslated.
+const volatile int* const kMenuTyping = (const volatile int*)0x68b858;
+
 void Translate(BYTE* state) {
-    if (g_bindings.empty() || frontend::InKeyCapture()) return;
+    if (g_bindings.empty() || frontend::InKeyCapture() || *kMenuTyping) return;
     BYTE in[256];
     memcpy(in, state, 256);
     for (int i = 0; i < 256; i++)
@@ -266,6 +270,7 @@ struct Step {
     DWORD hold;
     int x, y;  // MOUSE=x;y moves the virtual cursor; CLICK presses the left button
     bool click;
+    std::string text;  // TEXT=chars types them (WM_CHAR, as a keyboard would)
 };
 std::vector<Step> g_steps;
 
@@ -276,7 +281,13 @@ DWORD WINAPI ScriptThread(void*) {
         if (s.ms > now) Sleep(s.ms - now);
         HWND hwnd = headless::Window();
         if (!s.key) {
-            if (s.click) {
+            if (!s.text.empty()) {
+                Log("script: type \"%s\"", s.text.c_str());
+                for (char c : s.text) {
+                    if (hwnd) PostMessageA(hwnd, WM_CHAR, (BYTE)c, 1);
+                    Sleep(60);
+                }
+            } else if (s.click) {
                 Log("script: click");
                 if (hwnd) PostMessageA(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, 0);
                 Sleep(s.hold);
@@ -356,6 +367,7 @@ void LoadBindings() {
 
 void StartScript(const char* script) {
     // "2.5:RETURN,4:W/2000": key at 2.5 s; an optional /ms holds it (default 150).
+    // "6:TEXT=10.0.0.5:47700" types the text after the time's colon.
     std::string s = script;
     size_t pos = 0;
     while (pos < s.size()) {
@@ -368,14 +380,15 @@ void StartScript(const char* script) {
             std::string name = item.substr(colon + 1);
             DWORD hold = 150;
             size_t slash = name.find('/');
-            if (slash != std::string::npos) {
+            if (slash != std::string::npos && name.rfind("TEXT=", 0) != 0) {
                 hold = (DWORD)atoi(name.c_str() + slash + 1);
                 name = name.substr(0, slash);
             }
             int mx, my;
-            if (sscanf(name.c_str(), "MOUSE=%d;%d", &mx, &my) == 2) g_steps.push_back({ms, nullptr, 0, mx, my, false});
-            else if (name == "CLICK") g_steps.push_back({ms, nullptr, hold, 0, 0, true});
-            else if (const KeyName* k = FindKey(name)) g_steps.push_back({ms, k, hold, 0, 0, false});
+            if (name.rfind("TEXT=", 0) == 0) g_steps.push_back({ms, nullptr, 0, 0, 0, false, name.substr(5)});
+            else if (sscanf(name.c_str(), "MOUSE=%d;%d", &mx, &my) == 2) g_steps.push_back({ms, nullptr, 0, mx, my, false, ""});
+            else if (name == "CLICK") g_steps.push_back({ms, nullptr, hold, 0, 0, true, ""});
+            else if (const KeyName* k = FindKey(name)) g_steps.push_back({ms, k, hold, 0, 0, false, ""});
             else Log("script: unknown key %s", name.c_str());
         }
         pos = end + 1;

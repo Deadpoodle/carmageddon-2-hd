@@ -18,6 +18,7 @@
 #include <winsock2.h>
 #include <windows.h>
 
+#include <atomic>
 #include <cstdio>
 #include <cstring>
 #include <map>
@@ -68,8 +69,11 @@ decltype(&::WSASetLastError) w_WSASetLastError;
 int g_basePort = 47700;
 bool g_loopback;            // test runs: loopback only
 bool g_noBroadcast;         // test runs (C2HD_NET_NOBROADCAST=1): reach peers only by JoinAddress
-sockaddr_in g_join;         // [Network] JoinAddress, or port 0
-std::string g_joinText;     // resolved at the first bind (winsock is started by then)
+// [Network] JoinAddress (or the Network screen's field), resolved off the
+// game's thread: the IPv4 address | port << 32, both in network order; 0 = none.
+std::atomic<uint64_t> g_join;
+std::atomic<int> g_joinGeneration;
+std::string g_joinText;  // resolved at the first bind (winsock is started by then) or when set
 uint8_t g_node[6];
 std::map<SOCKET, uint16_t> g_ipxSockets;  // our UDP socket -> its IPX socket number (net order)
 std::map<uint64_t, sockaddr_in> g_peers;  // IPX node -> last UDP address
@@ -84,6 +88,38 @@ bool IsBroadcast(const char* node) {
     for (int i = 0; i < 6; i++)
         if ((uint8_t)node[i] != 0xff) return false;
     return true;
+}
+
+struct JoinRequest {
+    std::string text;
+    int generation;
+};
+
+DWORD WINAPI ResolveJoin(void* p) {
+    JoinRequest* req = (JoinRequest*)p;
+    char host[128] = "";
+    int port = g_basePort;
+    sscanf(req->text.c_str(), "%127[^:]:%d", host, &port);
+    unsigned long ip = inet_addr(host);
+    if (ip == INADDR_NONE)
+        if (hostent* he = gethostbyname(host)) memcpy(&ip, he->h_addr_list[0], 4);
+    bool ok = ip != INADDR_NONE && ip && port > 0 && port < 65536;
+    if (req->generation == g_joinGeneration) {  // not replaced while we looked it up
+        g_join = ok ? ip | (uint64_t)htons((u_short)port) << 32 : 0;
+        in_addr a;
+        a.s_addr = ip;
+        Log("net: join address %s -> %s:%d", req->text.c_str(), ok ? inet_ntoa(a) : "not resolved", port);
+    }
+    delete req;
+    return 0;
+}
+
+void StartResolve() {
+    g_join = 0;
+    int generation = ++g_joinGeneration;
+    if (g_joinText.empty()) return;
+    HANDLE t = CreateThread(nullptr, 0, &ResolveJoin, new JoinRequest{g_joinText, generation}, 0, nullptr);
+    if (t) CloseHandle(t);
 }
 
 // ---------------------------------------------------------------------------
@@ -106,20 +142,7 @@ int WINAPI h_bind(SOCKET s, const sockaddr* name, int len) {
     if (it == g_ipxSockets.end()) return w_bind(s, name, len);
     const SockaddrIpx* ipx = (const SockaddrIpx*)name;
     it->second = ipx->socket;
-    if (!g_joinText.empty() && !g_join.sin_port) {
-        char host[128] = "";
-        int port = g_basePort;
-        sscanf(g_joinText.c_str(), "%127[^:]:%d", host, &port);
-        unsigned long ip = inet_addr(host);
-        if (ip == INADDR_NONE)
-            if (hostent* he = gethostbyname(host)) memcpy(&ip, he->h_addr_list[0], 4);
-        if (ip != INADDR_NONE && ip) {
-            g_join.sin_family = AF_INET;
-            g_join.sin_addr.s_addr = ip;
-            g_join.sin_port = htons((u_short)port);
-        }
-        Log("net: join address %s -> %s", g_joinText.c_str(), g_join.sin_port ? inet_ntoa(g_join.sin_addr) : "not resolved");
-    }
+    if (!g_joinText.empty() && !g_join) StartResolve();
     for (int i = 0; i < kPorts; i++) {
         sockaddr_in a = {};
         a.sin_family = AF_INET;
@@ -188,7 +211,11 @@ int WINAPI h_sendto(SOCKET s, const char* buf, int len, int flags, const sockadd
         a.sin_port = htons((u_short)(g_basePort + i));
         SendUdp(s, packet, size, a);
     }
-    if (g_join.sin_port) SendUdp(s, packet, size, g_join);
+    if (uint64_t join = g_join) {
+        a.sin_addr.s_addr = (uint32_t)join;
+        a.sin_port = (u_short)(join >> 32);
+        SendUdp(s, packet, size, a);
+    }
     return len;
 }
 
@@ -262,13 +289,13 @@ bool Take(uintptr_t slot, T fn) {
 
 }  // namespace
 
-void Install() {
+bool Install() {
     if (settings::Get("Network", "Transport", "udp") == std::string("ipxwrapper")) {
         Log("net: the store's ipxwrapper (Transport=ipxwrapper)");
-        return;
+        return false;
     }
     HMODULE ws = LoadLibraryA("ws2_32.dll");
-    if (!ws) return;
+    if (!ws) return false;
     w_socket = (decltype(w_socket))GetProcAddress(ws, "socket");
     w_sendto = (decltype(w_sendto))GetProcAddress(ws, "sendto");
     w_recvfrom = (decltype(w_recvfrom))GetProcAddress(ws, "recvfrom");
@@ -301,6 +328,17 @@ void Install() {
               Take(0x589268, &h_ioctlsocket) && Take(0x58926c, &h_setsockopt);
     Log("net: IPX over UDP %s (ports %d..%d, node %02x%02x%02x%02x%02x%02x)", ok ? "on" : "FAILED", g_basePort,
         g_basePort + kPorts - 1, g_node[0], g_node[1], g_node[2], g_node[3], g_node[4], g_node[5]);
+    return ok;
+}
+
+void SetJoinAddress(const std::string& text) {
+    g_joinText = text;
+    if (!g_ipxSockets.empty()) {
+        StartResolve();  // winsock is up; otherwise the first bind resolves it
+    } else {
+        g_join = 0;
+        ++g_joinGeneration;
+    }
 }
 
 }  // namespace netshim

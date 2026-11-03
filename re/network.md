@@ -223,6 +223,19 @@ All coordinates are in 640x480 space; clicks are the easiest route. The screens 
 - **Typed address input:**
   - Start with `Carma2HD.ini` `[Net] Join=host[:port]` and/or a command-line switch.
   - Later: an "Address" field on the Network screen, added by wrapping Network_Enter 0x467ef0 (struct +0x108 at 0x5b3ac0). It can reuse the name-edit mechanism (0x466ec0 and the WM_CHAR buffer), as in `re/hd-tab.md`.
+  - **Done (src/netmenu.cpp), with these findings from the run-time work (H from the bytes, checked in hidden runs):**
+    - The menu text entry is generic: **0x46e470** edits the string at **0x688af4** while **0x68b858** is set. Limits and keys:
+      - max length **0x59b0d4**; 0x59b0d8 = −1;
+      - Backspace (menu key 0x32) deletes;
+      - Return (0x33) returns −1 and ends the edit; on an empty string it first restores the backup **0x763900** (0x60 bytes);
+      - Escape (0x3f) restores the backup and returns −2;
+      - other characters come from the WM_CHAR buffer (PDGetChar 0x51b040, 0x51afe0 maps bytes ≥ 0x80).
+    - **0x466ec0 is the driver name's toggle, not a generic one.**
+      - Start: 0x688b20 = 1, 0x68b858 = 1, 0x68723c = focus 0x688770, item fonts 2/3, **copies 0x75d590 (driver name) into the item and the backup**, PDClearCharBuffer, max **8**, then a 200 ms busy-wait.
+      - End: 0x484610, 0x4833b0, 0x484600, then the flags are cleared, fonts set to 1/1, the backup emptied and SaveOptions 0x48d190 called.
+    - **Network_Update 0x469320** calls 0x46e470 at **0x469357**. On < 0 it calls 0x466ec0, then **copies the focused item's text into the driver name 0x75d590**. So another field on this screen must end its own edit before the update sees < 0; the patch redirects that call.
+    - The status text (item 30, 412,350, 200×32, wrap, font 11) runs to five lines for a selected game ("GAME / TYPE (wraps) / PLAYERS / STATUS"). The patch's field sits on one line at y 428 under it.
+    - Stock: after a text edit ends with Return, the game's crosshair cursor lines appear across the whole screen (seen with the driver name too).
 - **Alternatives considered:**
   - A fake row in the PD list 0x6ac574 or the menu table 0x688718. It still needs DETAILS and a transport underneath; no gain.
   - Patching 0x519c62 to add a second `sendto`. Moot with ipxwrapper underneath; unnecessary with the shim.
