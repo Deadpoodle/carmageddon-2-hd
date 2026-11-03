@@ -10,6 +10,7 @@ It is tested with the Steam and GOG.com releases. Both ship the same game (`CARM
 
 ## Contents
 
+- [Before and after](#before-and-after)
 - [Features](#features)
 - [Installing](#installing)
 - [Steam Deck and Linux](#steam-deck-and-linux)
@@ -22,6 +23,25 @@ It is tested with the Steam and GOG.com releases. Both ship the same game (`CARM
 - [Credits](#credits)
 
 Versions and what changed in each: [CHANGELOG.md](CHANGELOG.md). The main menu shows the version in its bottom right corner.
+
+## Before and after
+
+| Original (Steam release) | Carmageddon II HD |
+|---|---|
+| ![The original main menu at 640x480](docs/screenshots/menu-before.jpg) | ![The main menu at 2560x1440, the backdrop filling the wide screen](docs/screenshots/menu-after.jpg) |
+| The main menu at 640×480 | At your desktop's resolution (here 2560×1440), the backdrop filling the wide screen |
+| ![The original race start at 640x480](docs/screenshots/race-before.jpg) | ![The race start at 2560x1440 with a wider view](docs/screenshots/race-after.jpg) |
+| Races at 640×480 | Races at 2560×1440: a wider view (Hor+), the HUD spread to the edges, 4x anti-aliasing and 16x anisotropic filtering |
+| ![The original race at 640x480](docs/screenshots/race2-before.jpg) | ![The race at 2560x1440, with scenery drawn further](docs/screenshots/race2-after.jpg) |
+| A few seconds in | The same, with the scenery drawn further |
+| ![The player's car at 640x480, enlarged 3x](docs/screenshots/car-before.jpg) | ![The player's car at 2560x1440](docs/screenshots/car-after.jpg) |
+| The player's car, enlarged 3x from 640×480 | The same view at 2560×1440 |
+
+![The HD tab beside GRAPHICS in the game's options](docs/screenshots/hd-tab.jpg)
+
+*The patch's settings, on an HD tab beside GRAPHICS (Options → Settings).*
+
+*The "original" shots are the unpatched Steam release (its Glide renderer through nGlide, at the game's 640×480). The others are the patched game full-screen at 2560×1440 with its default settings. Both runs start the same new game; the opponents' cars differ from run to run. The HD tab is from the automated test harness.*
 
 ## Features
 
