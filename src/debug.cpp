@@ -19,6 +19,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 
 #include "hook.h"
 #include "log.h"
@@ -38,6 +39,52 @@ constexpr int kLineHeight = 10;
 constexpr BYTE kDikF2 = 0x3c;
 
 bool g_on;
+
+// C2HD_WATCH=<hex address> (diagnostic): a hardware write watch (debug
+// register 1) on 4 bytes, armed on the game's thread at its first keyboard
+// read: each write logs the address after the writing instruction, the new
+// value, and the code addresses on the stack.
+constexpr DWORD kArmWatch = 0xE0C2D002;
+uintptr_t g_watch;
+int g_watchHits;
+
+LONG CALLBACK WatchHandler(EXCEPTION_POINTERS* ep) {
+    CONTEXT* c = ep->ContextRecord;
+    DWORD code = ep->ExceptionRecord->ExceptionCode;
+    if (code == kArmWatch) {
+        c->Dr1 = g_watch;
+        c->Dr7 |= (1 << 2) | (1 << 20) | (3 << 22);  // L1, break on write, 4 bytes
+        c->ContextFlags |= CONTEXT_DEBUG_REGISTERS;
+        return EXCEPTION_CONTINUE_EXECUTION;
+    }
+    if (code == EXCEPTION_SINGLE_STEP && (c->Dr6 & 2)) {
+        c->Dr6 &= ~2u;
+        if (g_watchHits++ < 500) {
+            char callers[128] = "";
+            const uint32_t* sp = (const uint32_t*)c->Esp;
+            size_t n = 0;
+            for (int i = 0; i < 32 && n < sizeof callers - 10; i++)
+                if (sp[i] >= 0x401000 && sp[i] < 0x58a000) n += snprintf(callers + n, sizeof callers - n, " %08x", sp[i]);
+            Log("watch: eip %08lx wrote %08lx = %.4f (%08lx); stack%s", (unsigned long)c->Eip, (unsigned long)g_watch,
+                *(const float*)g_watch, (unsigned long)*(const uint32_t*)g_watch, callers);
+        }
+        return EXCEPTION_CONTINUE_EXECUTION;
+    }
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+
+void ArmWatch() {
+    static bool done;
+    if (done) return;
+    done = true;
+    char v[16] = "";
+    if (!GetEnvironmentVariableA("C2HD_WATCH", v, sizeof v)) return;
+    g_watch = strtoul(v, nullptr, 16);
+    if (!g_watch) return;
+    AddVectoredExceptionHandler(1, &WatchHandler);
+    RaiseException(kArmWatch, 0, 0, nullptr);
+    Log("watch: writes to %08lx (thread %lu)", (unsigned long)g_watch, GetCurrentThreadId());
+}
 
 int g_frames, g_fps;
 DWORD g_fpsFrom;
@@ -68,7 +115,7 @@ int Bodies() {
 void Draw() {
     uintptr_t screen = *kBackScreen;
     if (!screen) return;
-    char lines[10][64];
+    char lines[12][64];
     int n = 0;
     snprintf(lines[n++], 64, "FPS %d  FRAME %d MS", g_fps, *(int*)0x74d3e4);
     snprintf(lines[n++], 64, "TIME %.1f S", kGameTime() / 1000.0);
@@ -83,6 +130,8 @@ void Draw() {
     uintptr_t map = *(uintptr_t*)0x7632a4;
     snprintf(lines[n++], 64, "MAP %.1f %.1f  CUT %d %d", *(float*)0x68c868, *(float*)0x68c86c, *(int*)0x68c878,
              *(int*)0x68c874);
+    const float* xf = (const float*)0x763274;  // the track's world->map transform (3x4)
+    snprintf(lines[n++], 64, "MAPXF %.3f %.3f  T %.1f %.1f", xf[0], xf[6], xf[9], xf[10]);
     snprintf(lines[n++], 64, "MAPPM %dX%d  CUT %dX%d", map ? *(uint16_t*)(map + 0x34) : 0,
              map ? *(uint16_t*)(map + 0x36) : 0, *(int*)0x74ab94, *(int*)0x74abec);
     snprintf(lines[n++], 64, "PEDS %d  BODIES %d", ActivePeds(), Bodies());
@@ -117,6 +166,7 @@ void Install() {
 }
 
 void OnKeys(const BYTE* keys) {
+    ArmWatch();
     static bool was;
     bool down = (keys[kDikF2] & 0x80) != 0;
     if (down && !was && *(uintptr_t*)0x762438) {  // in a race

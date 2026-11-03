@@ -189,6 +189,19 @@ void __fastcall LoadHeadupSlots(void* file, int view, uintptr_t car) {
 
 int32_t* const kHeadupMapX = (int32_t*)0x74abac;
 int32_t* const kHeadupMapW = (int32_t*)0x74aba8;
+// The track load (0x504bf0) shifts the world->map transform 0x763274 by C,
+// so the full-screen map's dots land on its centred picture (0x506171 above).
+// The minimap cuts its window from the same 640x480 picture with the same
+// transform, which then put it C map pixels to the right (black or
+// out-of-picture minimaps near the right of a map). DrawMiniMap 0x4950b0 (reached by
+// one tail jump, at 0x496e26 in DoMap) now runs with the shift taken back out.
+void DrawMiniMap() {
+    float* tx = (float*)0x763298;  // the transform's x translation
+    *tx -= (float)g_centre;
+    ((void (*)())0x4950b0)();
+    *tx += (float)g_centre;
+}
+
 int g_mapShift;
 void* g_saveOptions;
 
@@ -263,7 +276,8 @@ bool Install(int w, int hud) {
     PatchLayout();
     frontend::Install(w);
     bool ok = hook::Redirect(0x489d5e, 0xe8, 0x48ba60, (const void*)&LoadHeadupSlots) &&
-              hook::Redirect(0x489d6b, 0xe8, 0x48ba60, (const void*)&LoadHeadupSlots);
+              hook::Redirect(0x489d6b, 0xe8, 0x48ba60, (const void*)&LoadHeadupSlots) &&
+              (g_centre == 0 || hook::Redirect(0x496e26, 0xe9, 0x4950b0, (const void*)&DrawMiniMap));
     options::OnLoaded(&AnchorMinimap);
     static const uint8_t saveStart[6] = {0x81, 0xec, 0x00, 0x01, 0x00, 0x00};  // sub esp, 0x100
     g_saveOptions = hook::Detour(0x48d190, saveStart, 6, (const void*)&SaveOptions);

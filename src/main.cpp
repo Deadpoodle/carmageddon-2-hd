@@ -13,6 +13,7 @@
 #include "controller.h"
 #include "debug.h"
 #include "display.h"
+#include "fixes.h"
 #include "frontend.h"
 #include "hdtab.h"
 #include "icons.h"
@@ -266,13 +267,14 @@ LONG CALLBACK WatchHandler(EXCEPTION_POINTERS* ep) {
         c->Dr6 = 0;
         if (g_watchHits++ < 3000) {
             char callers[96] = "";
-            if (c->Eip >= 0x520000) {
+            {
                 const uint32_t* sp = (const uint32_t*)c->Esp;
                 size_t n = 0;
                 for (int i = 0; i < 24 && n < sizeof callers - 10; i++)
                     if (sp[i] >= 0x401000 && sp[i] < 0x520000) n += snprintf(callers + n, sizeof callers - n, " %08x", sp[i]);
             }
-            Log("pedw %u hw eip %08lx x %.4f%s", kGameTime(), (unsigned long)c->Eip, *g_watchX, callers);
+            Log("watch %u eip %08lx value %.4f (%08lx) stack%s", kGameTime(), (unsigned long)c->Eip, *g_watchX,
+                (unsigned long)*(const uint32_t*)g_watchX, callers);
         }
         return EXCEPTION_CONTINUE_EXECUTION;
     }
@@ -469,6 +471,7 @@ void Start() {
     wrecks::Install();
     peds::Install();
     debug::Install();
+    fixes::Install();
     music::Install();
     StartTests();
     if (netshim::Install()) netmenu::Install();  // after the test harness: tests stay on loopback
