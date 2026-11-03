@@ -65,15 +65,22 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_WINDOWPOSCHANGED || msg == WM_SHOWWINDOW || msg == WM_STYLECHANGED) {
         RECT r = {};
         GetWindowRect(hwnd, &r);
-        Log("headless: msg %#x wp %#lx: window at %ld,%ld..%ld,%ld, style %#lx, %s", msg, (unsigned long)wp, r.left,
-            r.top, r.right, r.bottom, (unsigned long)GetWindowLongA(hwnd, GWL_STYLE),
-            IsWindowVisible(hwnd) ? "visible" : "hidden");
+        Log("headless: msg %#x wp %#lx: window at %ld,%ld..%ld,%ld, style %#lx, ex %#lx, %s", msg, (unsigned long)wp,
+            r.left, r.top, r.right, r.bottom, (unsigned long)GetWindowLongA(hwnd, GWL_STYLE),
+            (unsigned long)GetWindowLongA(hwnd, GWL_EXSTYLE), IsWindowVisible(hwnd) ? "visible" : "hidden");
     }
     if (msg == WM_WINDOWPOSCHANGING) {
         auto* wpos = (WINDOWPOS*)lp;
         wpos->x = kOff;
         wpos->y = kOff;
         wpos->flags = (wpos->flags & ~SWP_NOMOVE) | SWP_NOACTIVATE | SWP_NOZORDER;
+    }
+    // The graphics stack (DXGI) rewrites the extended style when the renderer
+    // starts, dropping WS_EX_TOOLWINDOW: the window then got a taskbar button
+    // and an Alt+Tab entry on the player's desktop for each test run.
+    if (msg == WM_STYLECHANGING && wp == (WPARAM)GWL_EXSTYLE) {
+        auto* st = (STYLESTRUCT*)lp;
+        st->styleNew = (st->styleNew | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE) & ~WS_EX_APPWINDOW;
     }
     if (msg == WM_MOUSEACTIVATE) return MA_NOACTIVATE;
     return CallWindowProcA(o_WndProc, hwnd, msg, wp, lp);
