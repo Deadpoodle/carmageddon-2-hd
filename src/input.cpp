@@ -61,6 +61,63 @@ Acquire_t o_Acquire;
 
 volatile BYTE g_script[256];  // scripted key state (0x80 = down), test runs only
 volatile int g_givePowerup = -1;  // POWERUP=n: given on the game thread's next keyboard read
+volatile bool g_dumpMap;          // DUMPMAP: the race's map and minimap pixelmaps to shots\, likewise
+
+// A pixelmap to shots\<name>_N.raw: a 16-byte header (width, height, row
+// bytes, type) and the rows as they are in memory.
+void DumpPixelmap(uintptr_t pm, const char* name, int n) {
+    if (!pm) return;
+    std::string dir = GameDir() + "shots";
+    CreateDirectoryA(dir.c_str(), nullptr);
+    char path[MAX_PATH];
+    snprintf(path, sizeof path, "%s\\%s_%d.raw", dir.c_str(), name, n);
+    int32_t head[4] = {*(uint16_t*)(pm + 0x34), *(uint16_t*)(pm + 0x36), *(int16_t*)(pm + 0x28), *(uint8_t*)(pm + 0x2c)};
+    const uint8_t* pixels = *(const uint8_t**)(pm + 8);
+    if (FILE* f = fopen(path, "wb")) {
+        fwrite(head, sizeof head, 1, f);
+        if (pixels) fwrite(pixels, 1, (size_t)head[1] * (head[2] < 0 ? -head[2] : head[2]), f);
+        fclose(f);
+    }
+    Log("map: %s %08lx (pixels %p) %dx%d type %d row %d -> %s", name, (unsigned long)pm, (const void*)pixels, head[0],
+        head[1], head[3], head[2], path);
+}
+
+// The track map the minimap is cut from (0x7632a4) and the minimap's
+// scratch pixelmap (0x68d8d8), as they are now.
+void DumpMap() {
+    static int n;
+    DumpPixelmap(*(uintptr_t*)0x7632a4, "map", n);
+    DumpPixelmap(*(uintptr_t*)0x68d8d8, "minimap", n);
+    n++;
+}
+
+// C2HD_MAPLOG=1 (diagnostic, for the minimap showing noise): four times a
+// second in a race, what DrawMiniMap 0x4950b0 last cut from the map (start
+// 0x68c878/0x68c874, size 0x74ab94 x 0x74abec, car at 0x68c868/0x68c86c in
+// map pixels) and the map's address and size; F12 saves both pixelmaps.
+void MapLog(const BYTE* keys) {
+    static bool on = [] {
+        char v[4] = "";
+        return GetEnvironmentVariableA("C2HD_MAPLOG", v, sizeof v) && v[0] == '1';
+    }();
+    if (!on || !*(uintptr_t*)0x762438) return;
+    static DWORD last;
+    static bool f12;
+    DWORD now = GetTickCount();
+    if (now - last >= 250) {
+        last = now;
+        uintptr_t pm = *(uintptr_t*)0x7632a4;
+        Log("map: cut %d,%d size %dx%d car %.1f,%.1f; map %08lx %dx%d pixels %p", *(int*)0x68c878, *(int*)0x68c874,
+            *(int*)0x74ab94, *(int*)0x74abec, *(float*)0x68c868, *(float*)0x68c86c, (unsigned long)pm,
+            pm ? *(uint16_t*)(pm + 0x34) : 0, pm ? *(uint16_t*)(pm + 0x36) : 0, pm ? *(void**)(pm + 8) : nullptr);
+    }
+    bool down = (keys[DIK_F12] & 0x80) != 0;
+    if (down && !f12) {
+        Log("map: F12");
+        DumpMap();
+    }
+    f12 = down;
+}
 
 uintptr_t Slot(void* obj, int i) { return (uintptr_t)(*(void***)obj + i); }
 
@@ -232,6 +289,10 @@ HRESULT WINAPI h_GetDeviceState(void* dev, DWORD size, void* data) {
     if (headless::Active()) {    // test runs: the script only, never the real keyboard
         for (int i = 0; i < 256; i++) ((BYTE*)data)[i] = g_script[i];
         hr = DI_OK;
+        if (g_dumpMap && *(uintptr_t*)0x762438) {
+            g_dumpMap = false;
+            DumpMap();
+        }
         if (g_givePowerup >= 0 && *(uintptr_t*)0x762438) {  // the race's info, 0 outside a race
             // GotPowerup 0x4d8d40 (ecx = car, edx = index, two stack args it pops),
             // as its developer key 0x4d8d30 calls it; 0x75bc2c is the player's car.
@@ -242,6 +303,7 @@ HRESULT WINAPI h_GetDeviceState(void* dev, DWORD size, void* data) {
         }
     }
     if (SUCCEEDED(hr)) {
+        MapLog((const BYTE*)data);
         Translate((BYTE*)data);
         controller::InjectKeys((BYTE*)data, &TargetScan);
     }
@@ -299,6 +361,7 @@ struct Step {
     DWORD wait = 0;       // WAIT=s: pause (later steps' times count from the start, so a
                           // tour with long steps can use small times and WAITs)
     int powerup = -1;     // POWERUP=n: give the player power-up n (in a race)
+    bool dumpMap = false; // DUMPMAP: save the race's map pixelmap (shots\map_N.raw)
 };
 
 // A scripted key press as a person makes it: down for a few menu frames, then
@@ -322,6 +385,8 @@ DWORD WINAPI ScriptThread(void*) {
                 Sleep(s.wait);
             } else if (s.powerup >= 0) {
                 g_givePowerup = s.powerup;
+            } else if (s.dumpMap) {
+                g_dumpMap = true;
             } else if (s.sweepKey) {
                 frontend::KeySweep(&Press, s.sweepKey->dik, s.sweepKey->name);
             } else if (!s.goTo.empty()) {
@@ -441,6 +506,7 @@ void StartScript(const char* script) {
             } else if (name.rfind("GOTO=", 0) == 0) st.goTo = name.substr(5);
             else if (name.rfind("WAIT=", 0) == 0) st.wait = (DWORD)(atof(name.c_str() + 5) * 1000);
             else if (name.rfind("POWERUP=", 0) == 0) st.powerup = atoi(name.c_str() + 8);
+            else if (name == "DUMPMAP") st.dumpMap = true;
             else if (name.rfind("PAD=", 0) == 0) {
                 static const struct {
                     const char* name;
