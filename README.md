@@ -58,6 +58,7 @@ Versions and what changed in each: [CHANGELOG.md](CHANGELOG.md). The main menu s
 - Cutscenes enlarged 4x with deband, light sharpening and Lanczos scaling, and shown as large as the screen allows (800x480 of a 16:9 frame instead of 640x384), on true black.
 - Sharper text and HUD art: their textures are enlarged 2x with Scale2x.
 - The CD music plays: a store compatibility shim had stopped it.
+- A music volume bar beside the effects bar, in the Options and pause menus, by mouse, keys or pad. The original only had music On or Off.
 
 **Controls**
 - A modern keyboard scheme (W/A/S/D or the arrows), and any action can be put on any key.

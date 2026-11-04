@@ -4,6 +4,9 @@ Carmageddon II HD follows [semantic versioning](https://semver.org/). Until a fi
 
 The game itself is the Steam release, which labels itself `v1.02a`. It is the same build as the official "Super Patch V2.0" (both game exes were built on 30 November 1998). Steam's copy has its CD protection removed, plus an extra import for its CD-music player.
 
+## 0.24.0 (2026-11-04)
+- A music volume bar under the effects bar on the Options and pause menus, in place of music On/Off: mouse, or Left/Right on keys and pad. All the way down stops the music. It needs the store's ogg music player in the game folder, which the Steam and GOG releases have.
+
 ## 0.23.0 (2026-11-04)
 - Zombies. Pick Zombies under Pedestrians on the HD tab (`[Game] Pedestrians`), and from the next start of the game every pedestrian, animals included, shambles all the time, moans instead of screaming, and has a grubby grey-green skin and green blood. Groovin' and Panic still take over while they last. The text says ZOMBIE where it said pedestrian, as the official zombie patch did. No extra files are needed.
 

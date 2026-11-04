@@ -40,6 +40,16 @@
 // from QUIT GAME, ended the race without Return. The mouse never did. Its
 // enter is wrapped to make the window empty (-1..-1) when it has no list.
 //
+// The same screen gets a music volume bar instead of its On/Off words. The game
+// has no music volume: MVolume 0x75bbf0 is a switch (six tests against 0x80 start
+// or stop the CD, now against 1), so the bar drives the ogg player's own volume
+// (music::SetVolume). The screen's Up/Down follow item order, so on first entry
+// the items after the effects bar are rearranged (a copy of its track and fill as
+// 13-15 and 16-18, OK and QUIT GAME moved to 19 and 20, the label to 21), and on
+// every entry a second record is chained after the effects bar's (0x763820,
+// rebuilt by the enter) in the game's slider list. Bars are ordinary items and
+// a record; drawing, mouse and Left/Right are the game's own.
+//
 // The lobby (NetSync 0x61bad0): Esc moves the focus to ABORT GAME (27), and
 // Esc again there presses it, so a stray Esc doesn't leave the game.
 #include "menukeys.h"
@@ -47,9 +57,12 @@
 #include <windows.h>
 
 #include <cstdint>
+#include <cstring>
 
 #include "hook.h"
 #include "log.h"
+#include "music.h"
+#include "options.h"
 
 namespace menukeys {
 namespace {
@@ -204,14 +217,85 @@ uint8_t* const kOptions = (uint8_t*)0x632c60;
 const ScreenFn kOptionsEnter = (ScreenFn)0x474530;
 constexpr int kEnter = 0x108, kScrollCount = 0x8790, kScrollFirst = 0x87a4, kScrollLast = 0x87a8;
 
+struct Item {
+    int32_t text, callback, target, result, font, fontLit, x, y, w, h, state, visible, pixelmap, greyed, selectable,
+        selected, group, levelBar, wrap, glow, origX, origY;
+    uint8_t flags;
+    char name[255];
+};
+static_assert(sizeof(Item) == kItemSize, "item record");
+
+struct Slider {
+    uint8_t disabled;
+    int32_t fill, track, range;  // the first of three items each; pixels
+    float value, min, max;
+    void(__fastcall* changed)(Slider*);
+    Slider* next;
+};
+
+Item& OptionsItem(int i) { return *(Item*)(kOptions + kItems + i * kItemSize); }
+
+constexpr int kStockOptions = 18, kMusicOptions = 22, kEffectsTrack = 6, kEffectsFill = 10, kMusicLabel = 13,
+              kOptionsOk = 16, kOptionsQuit = 17, kMusicTrack = 13, kMusicFill = 16, kNewOk = 19, kNewQuit = 20,
+              kNewLabel = 21;
+constexpr int kBarRange = 0xec, kRadios = 0x9be8;
+int* const kMusicVolume = (int*)0x75bbf0;
+Slider** const kEffectsNext = (Slider**)0x763840;
+const auto kApplySound = (void(__fastcall*)(int))0x456530;  // 1: also starts or stops the CD by MVolume
+Slider g_musicBar;
+
+void __fastcall MusicChanged(Slider* bar) {
+    int volume = (int)(bar->value * 255 + 0.5f), before = *kMusicVolume;
+    *kMusicVolume = volume;
+    music::SetVolume(volume);
+    if ((before > 0) != (volume > 0)) kApplySound(1);
+}
+
+void AddMusicBar() {
+    Item label = OptionsItem(kMusicLabel), ok = OptionsItem(kOptionsOk), quit = OptionsItem(kOptionsQuit);
+    int y = label.y;
+    for (int i = 0; i < 3; i++) {
+        Item& track = OptionsItem(kMusicTrack + i);
+        track = OptionsItem(kEffectsTrack + i);
+        track.y = track.origY = y;
+        track.selected = 0;
+        OptionsItem(kEffectsFill + i).group = 0;  // else Return and KP4/KP6 treat the bar as a radio row
+        Item& fill = OptionsItem(kMusicFill + i);
+        fill = OptionsItem(kEffectsFill + i);
+        fill.y = fill.origY = y;
+        fill.glow = 2;  // it pulses on its own, not with the effects bar
+    }
+    OptionsItem(kNewOk) = ok;
+    OptionsItem(kNewQuit) = quit;
+    label.group = 0;
+    OptionsItem(kNewLabel) = label;
+    *(int32_t*)(kOptions + kCount) = kMusicOptions;
+    int32_t* radio = (int32_t*)(kOptions + kRadios);
+    radio[2] = 1;  // no radio row left: the enter's On/Off select writes nothing
+    radio[3] = 0;
+    Log("menukeys: Options: music volume bar added");
+}
+
 int __fastcall OptionsEnter(void* s) {
     int r = kOptionsEnter(s);  // loads options.txt on the first entry
     if (*(int32_t*)(kOptions + kScrollCount) == 0) {
         *(int32_t*)(kOptions + kScrollFirst) = -1;  // an empty window: no item is "in the list"
         *(int32_t*)(kOptions + kScrollLast) = -1;
     }
+    if (*(int32_t*)(kOptions + kCount) == kStockOptions) AddMusicBar();
+    g_musicBar = {};
+    g_musicBar.fill = kMusicFill;
+    g_musicBar.track = kMusicTrack;
+    g_musicBar.range = kBarRange;
+    g_musicBar.value = (float)*kMusicVolume / 255;
+    g_musicBar.max = 1;
+    g_musicBar.changed = &MusicChanged;
+    *kEffectsNext = &g_musicBar;
     return r;
 }
+
+// At start-up, right after OPTIONS.TXT.
+void ApplyMusicVolume() { music::SetVolume(*kMusicVolume); }
 
 // ---------------------------------------------------------------------------
 // The lobby (NetSync)
@@ -261,6 +345,11 @@ void Install() {
     } else {
         Log("menukeys: Network game options not as expected; its keys stay as they were");
     }
+    bool threshold = true;
+    for (uintptr_t site : {0x4555cfu, 0x455b2fu, 0x4564a3u, 0x4565f9u, 0x456881u, 0x4568c9u})
+        threshold = hook::PatchU32(site + 6, 0x80, 1) && threshold;  // cmp [MVolume], 0x80 -> 1
+    if (!threshold) Log("menukeys: music tests not as expected; below half the bar stops the music");
+    options::OnLoaded(&ApplyMusicVolume);
     uint32_t* optionsEnter = (uint32_t*)(kOptions + kEnter);
     if (*optionsEnter == (uint32_t)(uintptr_t)kOptionsEnter && *(int32_t*)(kOptions + kScrollCount) == 0 &&
         Callback(kOptions, 0) == 0x474730) {

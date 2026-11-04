@@ -17,6 +17,25 @@
 #include "log.h"
 
 namespace music {
+namespace {
+
+MMRESULT(WINAPI* g_auxSetVolume)(UINT, DWORD);
+
+void FindVolume(HMODULE winmm) {
+    g_auxSetVolume = (decltype(g_auxSetVolume))GetProcAddress(winmm, "auxSetVolume");
+    Log("music: the player's volume control %s", g_auxSetVolume ? "found" : "not found");
+}
+
+}  // namespace
+
+void SetVolume(int volume) {
+    static int last = -1;  // a held mouse button sets the bar every frame
+    if (!g_auxSetVolume || volume == last) return;
+    last = volume;
+    DWORD word = (DWORD)volume * 257;  // 255 -> 0xffff
+    g_auxSetVolume(0, word | word << 16);
+    Log("music: volume %d", volume);
+}
 
 void Install() {
     std::string path = GameDir() + "winmm.dll";
@@ -36,6 +55,7 @@ void Install() {
         GetModuleFileNameA(current, currentPath, MAX_PATH);
     if (_stricmp(currentPath, path.c_str()) == 0) {
         Log("music: the game folder's winmm.dll is already in use");
+        FindVolume(current);
         return;
     }
     HMODULE ogg = LoadLibraryA(path.c_str());
@@ -44,6 +64,7 @@ void Install() {
         Log("music: could not load %s", path.c_str());
         return;
     }
+    FindVolume(ogg);
     void* old;
     bool ok = hook::Import(slot, (void*)fn, &old);
     Log("music: CD music through the game folder's winmm.dll (was %s): %s", currentPath, ok ? "ok" : "FAILED");
