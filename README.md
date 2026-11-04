@@ -1,6 +1,6 @@
 # Carmageddon II HD
 
-An unofficial patch for **Carmageddon II: Carpocalypse Now** (the Steam and GOG.com releases) that makes the 1998 game run well on a modern PC. It brings modern resolutions with ultrawide support, modern controls and controller support, sharper visuals and network play that works on today's Windows.
+An unofficial patch for **Carmageddon II: Carpocalypse Now** (the Steam and GOG.com releases) that makes the 1998 game run well on a modern PC. It brings modern resolutions with ultrawide support, modern controls and controller support, sharper visuals, LAN play restored on today's Windows, and brand-new online play.
 
 It is a binary patch: a small `dinput.dll` that the game loads at start-up and that changes the game in memory. No game file is modified, and no game data is included here: you need your own copy of the game.
 
@@ -75,11 +75,11 @@ Versions and what changed in each: [CHANGELOG.md](CHANGELOG.md). The main menu s
 - The game carries on where you left off: it loads your latest save when it starts (the Graphics screen's **Auto Load**, now on by default). The original started a new game every time unless Auto Load was switched on.
 
 **Zombies**
-- Pick **Zombies** under Pedestrians on the HD tab, and the pedestrians turn undead: they shamble all the time (the game's drunk power-up, though Groovin' and Panic still take over), their shouts and screams drop to moans, their skin goes a dead grey-green with grime on their clothes, blood goes green, and the game's text says ZOMBIE, as the official zombie patch did. Animals too. It needs no extra files: the original zombie art only ever came on the UK disc.
+- A reconstruction of the censored release, which swapped the pedestrians for zombies. Pick **Zombies** under Pedestrians on the HD tab: they shamble all the time (the game's drunk power-up, though Groovin' and Panic still take over), their shouts and screams drop to moans, their skin goes a dead grey-green with grime on their clothes, blood goes green, and the game's text says ZOMBIE, as the official zombie patch did. Animals too. It needs no extra files: the original zombie art only ever came on the UK disc.
 
 **Network**
-- LAN games on modern Windows. The game only speaks IPX, which Windows no longer has; the patch carries it over UDP.
-- Join a game over the internet by typing the host's address on the Network screen. Three or more players work too: the host's copy passes on what the joining players send each other.
+- LAN play restored on modern Windows. The game only speaks IPX, which Windows no longer has; the patch carries it over UDP.
+- Online play, new with this patch: the original game is LAN only. Join a game over the internet by typing the host's address on the Network screen. Three or more players work too: the host's copy passes on what the joining players send each other.
 - Pedestrians in network races (each player's game has its own). The original game has none online.
 - The host's lobby shows the address to give friends, and opens the game's port on the router (UPnP) while hosting.
 - Several copies on one PC, for testing.
@@ -234,7 +234,7 @@ In menus, the D-pad or left stick moves, A or Start selects, and B or Back goes 
 
 ## Network play
 
-The game's network mode lets up to 12 players race each other. The patch makes it work on modern Windows:
+The game's network mode lets up to 12 players race each other on a LAN. The patch restores that on modern Windows and adds play over the internet, which the original never had:
 - **On a local network (LAN)**, games are found automatically.
 - **Over the internet**, you type the host's address.
 
