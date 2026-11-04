@@ -76,6 +76,8 @@ const char* kDefaultIni =
     "EarlierGroups=1\r\n"
     "; humans, or zombies: they shamble and moan, grubby and green-blooded\r\n"
     "Pedestrians=humans\r\n"
+    "; 1 = skip the opening films (the end-of-game film still plays)\r\n"
+    "SkipIntro=0\r\n"
     "\r\n"
     "[Controls]\r\n"
     "; Follows the key set chosen on the Controls screen (or on the HD tab):\r\n"

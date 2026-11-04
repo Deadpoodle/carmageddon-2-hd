@@ -211,9 +211,19 @@ void* __cdecl AllocateTile(int, int, int, void*, int) {
     return reinterpret_cast<void*(__cdecl*)(int, int, int, void*, int)>(g_allocate)(5, 64 * g_k, 64 * g_k, nullptr, 0);
 }
 
+// [Game] SkipIntro=1: DoProgram 0x503c50 calls PlayIntroMovies 0x43f330 at start-up
+// (and in its state 3) with the two opening films. Only those calls go, so the
+// end-of-game film still plays, as it wouldn't with -NOCUTSCENES.
+void NoIntro() {}
+
 }  // namespace
 
 void Install() {
+    if (settings::Get("Game", "SkipIntro", "0") == "1") {
+        bool skip = hook::Redirect(0x503d05, 0xe8, 0x43f330, (const void*)&NoIntro) &&
+                    hook::Redirect(0x503d81, 0xe8, 0x43f330, (const void*)&NoIntro);
+        Log("movie: opening films %s", skip ? "skipped" : "not skipped (hook FAILED)");
+    }
     // A key skips a film (and ends the game's other "any key" waits) through
     // AnyKeyDown 0x482d70, which reads the keyboard only when 500 ms have
     // passed since the last read: nothing else reads it during a film, so a

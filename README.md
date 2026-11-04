@@ -172,6 +172,7 @@ Change these on the **HD** tab (Options → Settings → HD) or in `Carma2HD.ini
 | Frame rate | 60, **auto** | Auto is your screen's refresh rate, capped at 100. |
 | Pedestrians | **humans**, zombies | See [Features](#features). |
 | Earlier groups | **on**, off | On puts arrows beside the main menu's GROUP, to race finished groups again. Off is the original menu. |
+| Skip intro | on, **off** | On skips the opening films. The end-of-game film still plays. |
 
 Controls and Earlier groups apply at once. The others can only change as the game starts, so they take effect the next time you start it; the HD tab says so when one of them has changed.
 

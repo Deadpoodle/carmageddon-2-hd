@@ -93,8 +93,36 @@ bool g_started;
 // "Takes effect after a restart", shown on the HD page while a row differs from
 // what the game started with. The screen has no item to spare (99 and the
 // cursor's), so it borrows a stock row's label, hidden on that page anyway.
-constexpr int kNote = 2, kNoteX = 60, kNoteY = 318, kNoteFont = 3;
+constexpr int kNote = 2, kNoteX = 110, kNoteY = 354, kNoteFont = 3;
 Item g_noteStock;
+
+// Skip intro, a row in the indented part of the panel, as on the Graphics page.
+// The screen has no items to spare, so this too borrows from the stock page: its
+// last row, Ambience (label 50, On 51, Off 52, radio group 14), hidden on the HD
+// page. Its words keep their text and radio group, and are moved, with their
+// button quads (the hit test uses them), and put back with their selection on
+// leaving the page. Being stock items, they come before the HD rows in the
+// Up/Down order, so Update puts them after Earlier groups.
+constexpr int kSkipLabel = 50, kSkipOn = 51, kSkipOff = 52, kSkipX = 110, kSkipY = 330, kSkipOnX = 250, kSkipOffX = 330;
+Item g_skipStock[3];
+int g_ambience[2];  // the stock selection, while the words are ours
+bool g_skip, g_skipAtStart, g_skipShown;
+
+uint8_t* const kButtons = (uint8_t*)0x687248;  // g_buttons, 0x2c each: actor, model...
+const int* const kButtonCount = (const int*)0x68683c;
+const auto kModelUpdate = reinterpret_cast<void(__cdecl*)(void*, int)>(0x51f950);  // BrModelUpdate
+
+void MoveQuad(int item, const Item& it) {
+    if (*kButtonCount <= item) return;
+    uint8_t* model = *(uint8_t**)(kButtons + item * 0x2c + 4);
+    float* v = model ? *(float**)(model + 8) : nullptr;
+    if (!v) return;
+    v[0] = v[10] = (float)it.x;
+    v[20] = v[30] = (float)(it.x + it.w);
+    v[1] = v[31] = -(float)it.y;
+    v[11] = v[21] = -(float)(it.y + it.h);
+    kModelUpdate(model, 0x7fff);
+}
 
 void Fill(Item& it, int text, const char* name, int font, int fontLit, int x, int y, int state, int callback) {
     memset(&it, 0, sizeof it);
@@ -213,6 +241,39 @@ void LockStockYon(bool ours) {
         for (int i = kStockYonFirst; i <= kStockYonLast; i++) At(i).selected = 0;
 }
 
+void SkipRow(bool hd) {
+    if (hd == g_skipShown) return;
+    g_skipShown = hd;
+    if (hd) {
+        g_ambience[0] = At(kSkipOn).selected;
+        g_ambience[1] = At(kSkipOff).selected;
+        Fill(At(kSkipLabel), kTextOwn, "Skip intro:", 3, 3, kSkipX, kSkipY, 0, kStub);
+        At(kSkipLabel).wrap = 1;  // a fixed size: the text isn't measured
+        At(kSkipLabel).w = 130;
+        At(kSkipLabel).h = 16;
+        for (int i : {kSkipOn, kSkipOff}) {
+            Item& word = At(i);
+            word.x = word.origX = i == kSkipOn ? kSkipOnX : kSkipOffX;
+            word.y = word.origY = kSkipY;
+            word.selected = (i == kSkipOn) == g_skip;
+            word.visible = 1;
+            MoveQuad(i, word);
+        }
+        At(kSkipLabel).visible = 1;
+    } else {
+        g_skip = At(kSkipOn).selected != 0;
+        At(kSkipLabel) = g_skipStock[0];
+        for (int i : {kSkipOn, kSkipOff}) {
+            Item& word = At(i);
+            const Item& stock = g_skipStock[i - kSkipLabel];
+            word.x = word.origX = stock.x;
+            word.y = word.origY = stock.y;
+            word.selected = g_ambience[i - kSkipOn];
+            MoveQuad(i, word);
+        }
+    }
+}
+
 void ShowPage(bool hd) {
     g_hdPage = hd;
     for (int i = 0; i < kStockItems; i++) At(i).visible = hd ? (i == 1) : 1;  // OK (1) stays
@@ -222,6 +283,7 @@ void ShowPage(bool hd) {
     tab.state = hd ? 0 : 1;
     tab.visible = 1;
     for (int i = kGfxTab; i <= g_lastItem; i++) At(i).visible = hd ? 1 : 0;
+    SkipRow(hd);
     At(kNote) = g_noteStock;
     if (hd) {
         Fill(At(kNote), kTextOwn, "Settings will take effect after the game restarts", kNoteFont, kNoteFont, kNoteX,
@@ -264,8 +326,6 @@ const int kCorner[10] = {11, 34, 30, 35, 28, 29, 33, 31, 32, 10};
 const float kCurve[10][2] = {{263.19f, 83.47f}, {261.76f, 83.27f}, {260.17f, 82.89f}, {258.76f, 82.29f},
                              {257.09f, 81.16f}, {255.92f, 80.01f}, {255.00f, 78.60f}, {254.21f, 76.89f},
                              {253.85f, 75.62f}, {253.61f, 73.84f}};
-const auto kModelUpdate = reinterpret_cast<void(__cdecl*)(void*, int)>(0x51f950);  // BrModelUpdate
-
 void ShapeStrip() {
     uint8_t* model = (uint8_t*)kModelsB[kStripModel * 4];
     if (!model) return;
@@ -328,8 +388,11 @@ int __fastcall Enter(void* s) {
     int r = kGraphicsEnter(s);
     if (Field(kCount) == kStockItems) {
         g_noteStock = At(kNote);
+        for (int i = 0; i < 3; i++) g_skipStock[i] = At(kSkipLabel + i);
         Append();
     }
+    g_skip = settings::Get("Game", "SkipIntro", "0") == "1";
+    if (!g_started) g_skipAtStart = g_skip;
     ShowPage(false);
     for (int row = 0; row < kRowCount; row++) {
         int v = Current(row);
@@ -349,9 +412,20 @@ int __fastcall Enter(void* s) {
 // game starts, and the display, draw distance and pedestrian patches are laid
 // down then, so a change to any other row waits for a restart.
 int __fastcall Update(void* s) {
+    int before = *kFocus;
     int r = kGraphicsUpdate(s);
     if (g_hdPage) {
-        bool differs = false;
+        int f = *kFocus, last = g_first[kEarlierGroups];
+        if (f != before && !*(int*)0x79ecb8) {  // keys, not the mouse
+            bool fromSkip = before == kSkipOn || before == kSkipOff;
+            if (before >= last && before <= g_lastItem && f == 1) f = kSkipOn;   // Down, past Earlier groups
+            else if (fromSkip && f == 1) f = last;                               // Up
+            else if (fromSkip && (f == kHdTab || f == kGfxTab)) f = 1;           // Down, to OK
+            else if (before == 1 && (f == kSkipOn || f == kSkipOff)) f = kGfxTab;  // Down, round to the top
+            else if (before == 1 && f >= last) f = kSkipOn;                      // Up
+            *kFocus = f;
+        }
+        bool differs = (At(kSkipOn).selected != 0) != g_skipAtStart;
         for (int row = 0; row < kRowCount; row++) {
             int v = Selected(row);
             if (v >= 0 && v != g_atStart[row] && row != kControls && row != kEarlierGroups) differs = true;
@@ -367,8 +441,10 @@ int __fastcall Exit(void* s) {
         kSetYon(kYon[dd]);
         for (int i = kStockYonFirst; i <= kStockYonLast; i++) At(i).selected = 0;
     }
+    SkipRow(false);
     At(kNote) = g_noteStock;  // the stock exit reads the screen's rows
     int r = kGraphicsExit(s);
+    settings::Set("Game", "SkipIntro", g_skip ? "1" : "0");
     for (int row = 0; row < kRowCount; row++) {
         int v = Selected(row);
         if (v >= 0) Store(row, v);
