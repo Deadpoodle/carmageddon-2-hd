@@ -28,7 +28,7 @@ Versions and what changed in each: [CHANGELOG.md](CHANGELOG.md). The main menu s
 
 | Original (Steam release) | Carmageddon II HD |
 |---|---|
-| ![The original main menu at 640x480](docs/screenshots/menu-before.jpg) | ![The main menu at 2560x1440, the backdrop filling the wide screen](docs/screenshots/menu-after.jpg) |
+| ![The original main menu at 640x480](docs/screenshots/menu-before.jpg) | ![The main menu at 2560x1440, the backdrop filling the wide screen, with an arrow beside GROUP back to the finished group](docs/screenshots/menu-after.jpg) |
 | The main menu at 640×480 | At your desktop's resolution (here 2560×1440), the backdrop filling the wide screen |
 | ![The original race start at 640x480](docs/screenshots/race-before.jpg) | ![The race start at 2560x1440 with a wider view](docs/screenshots/race-after.jpg) |
 | Races at 640×480 | Races at 2560×1440: a wider view (Hor+), the HUD spread to the edges, 4x anti-aliasing and 16x anisotropic filtering |
