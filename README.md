@@ -53,7 +53,7 @@ Versions and what changed in each: [CHANGELOG.md](CHANGELOG.md). The main menu s
 - Scenery drawn up to nearly six times as far as the original, and pedestrians, traffic and opponents' detailed models with it, so they no longer pop in just ahead of you.
 
 **Visuals**
-- Anti-aliasing (2x, 4x or 8x), 16x anisotropic texture filtering with mipmaps, and full-precision colour instead of 16-bit dithering.
+- Anti-aliasing (2x, 4x or 8x), 16x anisotropic texture filtering with mipmaps, and full-precision colour instead of 16-bit dithering. These three are dgVoodoo2's work, so they are Windows only (see [Steam Deck and Linux](#steam-deck-and-linux)).
 - A frame cap at your screen's refresh rate, never above 100 fps. Above 100 the game's physics run fast.
 - Cutscenes enlarged 4x with deband, light sharpening and Lanczos scaling, and shown as large as the screen allows (800x480 of a 16:9 frame instead of 640x384), on true black.
 - Sharper text and HUD art: their textures are enlarged 2x with Scale2x.
@@ -114,11 +114,15 @@ To remove the patch, delete those four files and `Carma2HD.ini`.
 
 ## Steam Deck and Linux
 
-The patch runs under Proton, Steam's Windows layer, on a Steam Deck or any Linux PC. Proton normally uses its own copies of `dinput.dll` and `ddraw.dll`, so the game needs a launch option that tells it to load the game folder's copies instead:
+The patch runs under Proton, Steam's Windows layer, on a Steam Deck or any Linux PC. Proton normally uses its own copy of `dinput.dll`, so the game needs a launch option that tells it to load the game folder's copy instead:
 
 ```
-WINEDLLOVERRIDES="dinput,ddraw,d3dimm=n,b" %command%
+WINEDLLOVERRIDES="dinput=n,b" %command%
 ```
+
+**Without dgVoodoo2.** On Windows the patch renders through dgVoodoo2; under Proton it does not, and must not. dgVoodoo2 is Windows-only software, and from 2.82 onwards its DirectDraw crashes under Wine inside the first `IDirectDraw::CreateSurface` call, before any of this patch's code runs. `DirectDrawCreate` + `SetCooperativeLevel` + `CreateSurface` in a sixty-line test program is enough to reproduce it, so it happens on every Proton version and with every `dgVoodoo.conf`; its author has closed that report as not a bug ([dgVoodoo2 issue 131](https://github.com/dege-diosg/dgVoodoo2/issues/131)). Adding `ddraw` to `WINEDLLOVERRIDES` is what pulls dgVoodoo2 in, which is why the override above lists only `dinput`.
+
+So under Proton the game draws through Wine's own DirectDraw, and the renderer settings that are dgVoodoo2's work alone have no effect: **Anti-aliasing**, **Textures** and **Colour**. The 3D picture is drawn at the 768x480 buffer and scaled up to the screen, rather than drawn at the screen's own resolution. Everything else in the patch works as it does on Windows: the wide view and HUD, draw distance, the 4x cutscenes, sharp text and HUD art, the controller, the menu fixes and network play.
 
 **Installing with the script** (in Desktop Mode): open **Konsole** and paste this line:
 
@@ -128,9 +132,9 @@ curl -fsSL https://raw.githubusercontent.com/Deadpoodle/carmageddon-2-hd/main/to
 
 1. The script:
    - finds the game in any Steam library, on internal storage or an SD card;
-   - downloads the [latest release](https://github.com/Deadpoodle/carmageddon-2-hd/releases/latest) and copies in its `dinput.dll` and `dgVoodoo.conf`;
-   - downloads dgVoodoo2 2.87.5 from its GitHub releases and checks its `DDraw.dll` and `D3DImm.dll` before copying them in;
-   - sets the launch option above, keeping any options already there.
+   - downloads the [latest release](https://github.com/Deadpoodle/carmageddon-2-hd/releases/latest) and copies in its `dinput.dll`;
+   - takes out `DDraw.dll`, `D3DImm.dll` and `dgVoodoo.conf` if an older version of this script installed them, since they crash the game under Proton;
+   - sets the launch option above, keeping any options already there and dropping `ddraw` and `d3dimm` from it.
 2. Steam rewrites its settings when it exits, so the launch option can only be set while Steam is closed. If Steam is running, the script asks you to exit it (the Steam icon in the taskbar → Exit), then press Enter. Type `s` instead to skip, and paste the line above into **Carmageddon 2 → Properties → General → Launch Options** yourself.
 3. Go back to Gaming Mode and start the game as usual.
 
@@ -140,9 +144,9 @@ Running the line again updates the patch to the latest release. To remove the pa
 curl -fsSL https://raw.githubusercontent.com/Deadpoodle/carmageddon-2-hd/main/tools/install-steamdeck.sh | bash -s -- --uninstall
 ```
 
-Without internet on the Deck, copy `carma2hd.zip` over, extract it, and run `bash install-steamdeck.sh` from the extracted folder: it then installs that copy instead. dgVoodoo2 still has to be downloaded once.
+Without internet on the Deck, copy `carma2hd.zip` over, extract it, and run `bash install-steamdeck.sh` from the extracted folder: it then installs that copy instead. Nothing else has to be downloaded.
 
-**The GOG release on Linux** (through Heroic, Lutris or another Wine launcher): the script is for Steam's copy, so install by hand as on Windows, then add `WINEDLLOVERRIDES` with the value `dinput,ddraw,d3dimm=n,b` to the game's environment variables in the launcher.
+**The GOG release on Linux** (through Heroic, Lutris or another Wine launcher): the script is for Steam's copy, so copy only `dinput.dll` into the game folder (not dgVoodoo2's files, see above), then add `WINEDLLOVERRIDES` with the value `dinput=n,b` to the game's environment variables in the launcher.
 
 **On the Deck:**
 - **Screen:** `Resolution=auto` picks the Deck's 1280x800. Its 16:10 shape gets a 768x480 Hor+ view, with the HUD spread across the width. Docked, auto picks the external display's resolution instead.
@@ -152,7 +156,8 @@ Without internet on the Deck, copy `carma2hd.zip` over, extract it, and run `bas
 
 **If it doesn't work:**
 - **No `Carma2HD.log` in the game folder after a start:** the patch didn't load. Check the launch option.
-- **The log says "DirectDraw is ... not dgVoodoo2's":** the launch option is missing `ddraw` or `d3dimm`, so the game is stuck at 640x480.
+- **The game quits a second after it starts, and the log ends with `CRASH: ... DDRAW.dll`:** dgVoodoo2 is being loaded. Take `DDraw.dll`, `D3DImm.dll` and `dgVoodoo.conf` out of the game folder and `ddraw`/`d3dimm` out of the launch option, or just run the install line again.
+- **The log says "DirectDraw is ... not dgVoodoo2's":** expected under Proton, and not a problem; the game draws through Wine's DirectDraw. The "640x480" in that line is wrong here, as the wide buffer is still patched in.
 - **The log's first lines say "running under Wine":** the patch is loaded. It names Proton's Wine version there.
 
 ## Settings
@@ -166,9 +171,9 @@ Change these on the **HD** tab (Options → Settings → HD) or in `Carma2HD.ini
 | HUD width | **auto**, full, 16:9, 4:3 | How far the HUD spreads on a wide screen. Auto is the screen's width, up to 21:9. |
 | Controls | **classic**, modern | See [Controls](#controls). |
 | Draw distance | original, far, further, **max** | How far scenery is drawn. Original uses the Graphics tab's own setting. |
-| Anti-aliasing | off, 2x, **4x**, 8x | Edge smoothing. |
-| Textures | original, smooth, **sharpest** | Smooth is trilinear with mipmaps. Sharpest is 16x anisotropic with mipmaps. |
-| Colour | 16-bit, **smooth** | Smooth is full-precision colour. 16-bit is the original dithered look. |
+| Anti-aliasing | off, 2x, **4x**, 8x | Edge smoothing. Windows only (see [Steam Deck and Linux](#steam-deck-and-linux)). |
+| Textures | original, smooth, **sharpest** | Smooth is trilinear with mipmaps. Sharpest is 16x anisotropic with mipmaps. Windows only. |
+| Colour | 16-bit, **smooth** | Smooth is full-precision colour. 16-bit is the original dithered look. Windows only. |
 | Frame rate | 60, **auto** | Auto is your screen's refresh rate, capped at 100. |
 | Pedestrians | **humans**, zombies | See [Features](#features). |
 | Earlier groups | **on**, off | On puts arrows beside the main menu's GROUP, to race finished groups again. Off is the original menu. |
