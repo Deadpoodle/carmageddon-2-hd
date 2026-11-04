@@ -75,7 +75,7 @@ Versions and what changed in each: [CHANGELOG.md](CHANGELOG.md). The main menu s
 - The game carries on where you left off: it loads your latest save when it starts (the Graphics screen's **Auto Load**, now on by default). The original started a new game every time unless Auto Load was switched on.
 
 **Zombies**
-- A reconstruction of the censored release, which swapped the pedestrians for zombies. Pick **Zombies** under Pedestrians on the HD tab: they shamble all the time (the game's drunk power-up, though Groovin' and Panic still take over), their shouts and screams drop to moans, their skin goes a dead grey-green with grime on their clothes, blood goes green, and the game's text says ZOMBIE, as the official zombie patch did. Animals too. It needs no extra files: the original zombie art only ever came on the UK disc.
+- A best-effort reconstruction of the censored release based on 28 year old memories, swaps the pedestrians for zombies. Pick **Zombies** under Pedestrians on the HD tab. Needs no extra files.
 
 **Network**
 - LAN play restored on modern Windows. The game only speaks IPX, which Windows no longer has; the patch carries it over UDP.
