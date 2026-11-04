@@ -10,27 +10,43 @@
 #   bash install-steamdeck.sh --uninstall  remove the patch again
 #
 # It finds the game in any Steam library (internal storage or SD card), copies
-# in the patch (dinput.dll and dgVoodoo.conf from this script's folder, or the
-# latest release when the script is piped in), downloads dgVoodoo2's DDraw.dll and D3DImm.dll, and sets the
-# game's launch option so Proton loads them:
-#   WINEDLLOVERRIDES="dinput,ddraw,d3dimm=n,b" %command%
+# in the patch (dinput.dll from this script's folder, or the latest release when
+# the script is piped in), and sets the game's launch option so Proton loads it:
+#   WINEDLLOVERRIDES="dinput=n,b" %command%
 # Steam keeps launch options in its own files and rewrites them when it exits,
 # so the script sets the option only while Steam is closed; otherwise it shows
 # the line to paste into the game's Properties.
+#
+# No dgVoodoo2 under Proton. dgVoodoo2 is Windows-only software: from 2.82
+# onwards its DirectDraw crashes under Wine in the first IDirectDraw::Create-
+# Surface call, before any game code of ours runs, and its author has closed
+# that as "not a bug" (dege-diosg/dgVoodoo2 issue 131). The crash needs nothing
+# but DirectDrawCreate + SetCooperativeLevel + CreateSurface, so it hits this
+# game on every Proton version and with every dgVoodoo.conf. Leaving ddraw to
+# Wine's own copy costs the resolution upscaling, anti-aliasing and texture
+# filtering that dgVoodoo2 does on Windows; everything else in the patch (the
+# wide view and HUD, draw distance, enlarged cutscenes, sharp text, controller,
+# menus, fixes) works as it does there. Older copies of this script installed
+# dgVoodoo2 and overrode ddraw, so an install over one of those takes those
+# files back out again.
 set -euo pipefail
 
 APPID=282030
-OVERRIDES='WINEDLLOVERRIDES="dinput,ddraw,d3dimm=n,b"'
+OVERRIDES='WINEDLLOVERRIDES="dinput=n,b"'
 RELEASE_ZIP=${C2HD_RELEASE_ZIP:-https://github.com/Deadpoodle/carmageddon-2-hd/releases/latest/download/carma2hd.zip}
-DGV_ZIP=${C2HD_DGV_ZIP:-https://github.com/dege-diosg/dgVoodoo2/releases/download/v2.87.5/dgVoodoo2_87_5.zip}
-DGV_DDRAW_SHA=612a24408a090a3c6f3886557fa18034ee742e94ad0a40ebdf854d2816176c2e
-DGV_D3DIMM_SHA=93c534f2d17419ea78f15551f7e0aac78b3c503733a840914fa063708a5afe8e
-PATCH_FILES=(dinput.dll DDraw.dll D3DImm.dll dgVoodoo.conf)
+# Installed by this script, and taken out again by --uninstall. DDraw.dll,
+# D3DImm.dll and dgVoodoo.conf are only here so that an install or an uninstall
+# clears away what older copies of this script put in.
+PATCH_FILES=(dinput.dll)
+DGV_FILES=(DDraw.dll D3DImm.dll dgVoodoo.conf)
+# Names an older copy of this script put in WINEDLLOVERRIDES, taken out of the
+# launch option whether we are installing or uninstalling.
+STALE_DLLS='ddraw,d3dimm'
 
 say() { printf '%s\n' "$*"; }
 fail() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 # Questions read the terminal, so they work even when the script is piped in.
-ask() { local a=""; read -r -p "$1 " a </dev/tty || true; printf '%s' "$a"; }
+ask() { local a=""; read -r -p "$1 " a 2>/dev/null </dev/tty || true; printf '%s' "$a"; }
 
 uninstall=0
 case "${1:-}" in
@@ -73,10 +89,10 @@ steam_running() { pgrep -x steam >/dev/null 2>&1 || pgrep -x steamwebhelper >/de
 # in every Steam user's localconfig.vdf, keeping whatever else is there.
 # Each file is backed up first, as localconfig.vdf.c2hd-backup.
 set_launch_option() {
-    python3 - "$steam_root" "$APPID" "$OVERRIDES" "$1" <<'PY'
+    python3 - "$steam_root" "$APPID" "$OVERRIDES" "$1" "$STALE_DLLS" <<'PY'
 import glob, os, re, shutil, sys
 
-root, appid, overrides, mode = sys.argv[1:5]
+root, appid, overrides, mode, stale = sys.argv[1:6]
 
 def parse(text):
     tokens = re.findall(r'"((?:[^"\\]|\\.)*)"|([{}])', text)
@@ -140,7 +156,9 @@ for path in files:
     theirs = (found.group(2) if found.group(2) is not None else found.group(3)) if found else ''
     rest = (plain[:found.start()] + plain[found.end():]).strip() if found else plain.strip()
     ours_group = overrides.split('=', 1)[1].strip('"')
-    ours = set(ours_group.split('=')[0].split(','))
+    # Ours, plus the DLLs an older copy of this script used to override and
+    # which now have to go (ddraw, d3dimm: dgVoodoo2 crashes under Wine).
+    ours = set(ours_group.split('=')[0].split(',')) | set(filter(None, stale.split(',')))
     groups = []
     for group in filter(None, theirs.split(';')):
         names, _, how = group.partition('=')
@@ -188,7 +206,7 @@ launch_option() {
 # --- Uninstall -----------------------------------------------------------------
 
 if [ "$uninstall" = 1 ]; then
-    for f in "${PATCH_FILES[@]}" Carma2HD.ini Carma2HD.log; do rm -f "$game/$f"; done
+    for f in "${PATCH_FILES[@]}" "${DGV_FILES[@]}" Carma2HD.ini Carma2HD.log; do rm -f "$game/$f"; done
     say "Patch files removed from the game folder."
     launch_option remove
     say "Done. Carmageddon 2 is back to the store's version."
@@ -198,7 +216,7 @@ fi
 # --- The patch's own files -------------------------------------------------------
 
 src=""
-if [ -n "$here" ] && [ -f "$here/dinput.dll" ] && [ -f "$here/dgVoodoo.conf" ]; then
+if [ -n "$here" ] && [ -f "$here/dinput.dll" ]; then
     src="$here"
     say "Patch: from $here"
 else
@@ -207,36 +225,25 @@ else
         python3 -c 'import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])' "$work/carma2hd.zip" "$work/patch"
         src="$(dirname "$(find "$work/patch" -name dinput.dll | head -n1)")"
     fi
-    [ -n "$src" ] && [ -f "$src/dinput.dll" ] && [ -f "$src/dgVoodoo.conf" ] ||
-        fail "couldn't download the patch. Put dinput.dll and dgVoodoo.conf next to this script (from the release zip) and run it again."
+    [ -n "$src" ] && [ -f "$src/dinput.dll" ] ||
+        fail "couldn't download the patch. Put dinput.dll next to this script (from the release zip) and run it again."
 fi
 
-# --- dgVoodoo2 -------------------------------------------------------------------
+# --- dgVoodoo2, from an older install --------------------------------------------
 
-sha() { sha256sum "$1" | cut -d' ' -f1; }
-if [ -f "$game/DDraw.dll" ] && [ "$(sha "$game/DDraw.dll")" = "$DGV_DDRAW_SHA" ] &&
-   [ -f "$game/D3DImm.dll" ] && [ "$(sha "$game/D3DImm.dll")" = "$DGV_D3DIMM_SHA" ]; then
-    say "dgVoodoo2: already installed"
-else
-    say "dgVoodoo2: downloading 2.87.5 from its GitHub releases..."
-    curl -fsSL -o "$work/dgv.zip" "$DGV_ZIP" || fail "couldn't download dgVoodoo2 ($DGV_ZIP)"
-    python3 - "$work/dgv.zip" "$work/dgv" <<'PY'
-import os, sys, zipfile
-z = zipfile.ZipFile(sys.argv[1])
-os.makedirs(sys.argv[2], exist_ok=True)
-for name in z.namelist():
-    parts = name.replace('\\', '/').split('/')
-    if len(parts) >= 3 and parts[-3].lower() == 'ms' and parts[-2].lower() == 'x86' and parts[-1].lower() in ('ddraw.dll', 'd3dimm.dll'):
-        with open(os.path.join(sys.argv[2], parts[-1]), 'wb') as f:
-            f.write(z.read(name))
-PY
-    [ -f "$work/dgv/DDraw.dll" ] && [ "$(sha "$work/dgv/DDraw.dll")" = "$DGV_DDRAW_SHA" ] &&
-        [ -f "$work/dgv/D3DImm.dll" ] && [ "$(sha "$work/dgv/D3DImm.dll")" = "$DGV_D3DIMM_SHA" ] ||
-        fail "the dgVoodoo2 download isn't the expected 2.87.5 (MS/x86 DDraw.dll and D3DImm.dll)"
-    cp "$work/dgv/DDraw.dll" "$work/dgv/D3DImm.dll" "$game/"
+# Under Proton the game draws through Wine's own DirectDraw (see the note at the
+# top). An older copy of this script installed dgVoodoo2 here, which now only
+# crashes the game on start-up, so take it back out.
+left_over=0
+for f in "${DGV_FILES[@]}"; do
+    if [ -e "$game/$f" ]; then left_over=1; fi
+done
+if [ "$left_over" = 1 ]; then
+    for f in "${DGV_FILES[@]}"; do rm -f "$game/$f"; done
+    say "dgVoodoo2: removed (${DGV_FILES[*]}) - it crashes the game under Proton"
 fi
 
-cp "$src/dinput.dll" "$src/dgVoodoo.conf" "$game/"
+cp "$src/dinput.dll" "$game/"
 say "Installed: ${PATCH_FILES[*]}"
 
 launch_option add

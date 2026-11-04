@@ -4,6 +4,11 @@ Carmageddon II HD follows [semantic versioning](https://semver.org/). Until a fi
 
 The game itself is the Steam release, which labels itself `v1.02a`. It is the same build as the official "Super Patch V2.0" (both game exes were built on 30 November 1998). Steam's copy has its CD protection removed, plus an extra import for its CD-music player.
 
+## 0.28.1 (2026-11-04)
+- The Steam Deck and Linux install no longer uses dgVoodoo2, which crashed the game on start-up under Proton. dgVoodoo2 is Windows-only software: from 2.82 onwards its DirectDraw faults inside the first `IDirectDraw::CreateSurface` call under Wine, before any of our code runs, on every Proton version (7 to 11 tested) and with every `dgVoodoo.conf`; a sixty-line `DirectDrawCreate` + `SetCooperativeLevel` + `CreateSurface` program reproduces it, and its author has closed that as not a bug ([dgVoodoo2 issue 131](https://github.com/dege-diosg/dgVoodoo2/issues/131)).
+- The launch option the install script sets is now `WINEDLLOVERRIDES="dinput=n,b" %command%`. It was `dinput,ddraw,d3dimm=n,b`, and the `ddraw` part is what pulled dgVoodoo2 in. Installing over an older copy takes `ddraw` and `d3dimm` out of the launch option and `DDraw.dll`, `D3DImm.dll` and `dgVoodoo.conf` out of the game folder.
+- Under Proton the game now draws through Wine's own DirectDraw. Anti-aliasing, Textures and Colour are dgVoodoo2's work and so do nothing there, and the 3D picture is scaled up from the 768x480 buffer rather than drawn at the screen's resolution. The rest of the patch is unchanged: the wide view and HUD, draw distance, the 4x cutscenes, sharp text, the controller, the menus, the fixes and network play. Windows is untouched.
+
 ## 0.28.0 (2026-11-04)
 - Skip intro on the HD tab (`[Game] SkipIntro`, off by default) skips the opening films, without touching any game file. The end-of-game film still plays.
 
