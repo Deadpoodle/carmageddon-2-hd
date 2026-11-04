@@ -25,7 +25,7 @@ Read from the instructions (objdump of `CARMA2_HW.EXE`) and the Ghidra caches, a
 
 - `PEDS\PEEPS\<type>.TWT`, `PIXIES.P16`: RGB565, mostly 128², no shade table (H). `<NAME>B` is a bloodied copy, stored right after `<NAME>`. Not every copy lines up with its skin (FEM07's doesn't).
 - Path: 0x406ab0 → LoadPedPeepsArt 0x4cbc10 (call at 0x406ba1) → 0x502cf0 → 0x5024f0 → BrMapAdd, call at 0x502641. Duplicates are freed instead of added. The storage is cleared each race, so skins load per race (H/M).
-- **Patch:** a flag around 0x4cbc10, and the BrMapAdd call recolours type 5 pixelmaps before the first upload. Formula in `tools/zombify.py` and `zombies.cpp`: flesh tones (hue 8 to 42 degrees, saturation 0.12 to 0.92, which takes in dark skin; tan clothes get caught too) go to a dead grey-green, clothes keep their colour, and blotchy grime (hashed value noise) darkens everything. In `<NAME>B`, a texel that differs from `<NAME>` and is red is blood.
+- **Patch:** a flag around 0x4cbc10, and the BrMapAdd call recolours type 5 pixelmaps before the first upload. Formula in `tools/zombify.py` and `zombies.cpp`: skin goes to a dead grey-green, clothes keep their colour, and blotchy grime (hashed value noise) darkens everything. Colour alone can't find skin: khaki and tan clothes share its hue, and in a race they turned green. But every human skin has one layout (three faces across the top 30%, a hand at the bottom left, arms down the left, torso right of them), so each texture's own flesh tone is the median red and green share of the flesh-coloured texels in the face band. A texel counts as skin by how near it is to that tone, fading out to avoid speckle, with a wider match in the face band and a narrower one on the torso. Animals have too little flesh colour in that band, so any flesh-like colour counts. In `<NAME>B`, a texel that differs from `<NAME>` and is red is blood.
 
 ## Blood
 
@@ -40,7 +40,7 @@ No colour constant in the code; it's all data (M).
 | Tyre trails | GIBSMEAR through LoadPixelmap 0x48ec00, call at 0x4e9ce1. OILSMEAR comes through the same call |
 
 - All the PEDS\GIBLETS art passes the BrMapAdd call during LoadGiblets. **Patch:** a second flag there recolours it; the trail call recolours only GIBSMEAR; chunk colours are overwritten after LoadGiblets.
-- Because blood art loads once at start-up, the setting is read once, at the start, and nothing is installed for Humans. Changing it on the HD tab restarts the game (`src/restart.cpp`).
+- Because blood art loads once at start-up, the setting is read once, at the start, and nothing is installed for Humans. The HD tab says when a change waits for a restart.
 
 ## Wording
 

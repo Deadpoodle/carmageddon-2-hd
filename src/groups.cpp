@@ -40,7 +40,6 @@
 #include "hook.h"
 #include "log.h"
 #include "options.h"
-#include "restart.h"
 #include "settings.h"
 
 namespace groups {
@@ -319,8 +318,6 @@ Item g_stock[2];  // the stock arrows (3 and 8) as the screen file has them
 bool g_saved;
 
 int __fastcall Enter(void* s) {
-    if (restart::Restarted()) *kAutoLoad = settings::Get("Game", "AutoLoad", "1") != "0";  // lent for the restart
-    restart::Back();
     g_on = settings::Get("Game", "EarlierGroups", "1") != "0";
     OurStates(g_on);
     g_built = false;
@@ -396,7 +393,6 @@ void Skip(void* s, int before) {
 }
 
 int __fastcall Update(void* s) {
-    if (restart::Pending()) restart::Now();  // settings changed in a race
     if (g_on && !*kMouseMode && *kFocus == kLabel) {
         bool left = kKeyPressed(kKeyLeft) || kKeyPressed(kPad4);
         if ((left || kKeyPressed(kKeyRight) || kKeyPressed(kPad6)) && Page(left ? -1 : 1))
@@ -427,7 +423,7 @@ int __fastcall RaceResult(int result) {
 }
 
 void ApplyAutoLoad() {
-    *kAutoLoad = settings::Get("Game", "AutoLoad", "1") != "0" || restart::Restarted();
+    *kAutoLoad = settings::Get("Game", "AutoLoad", "1") != "0";
     Log("groups: Auto Load %s", *kAutoLoad ? "on (the latest save at start-up)" : "off");
 }
 

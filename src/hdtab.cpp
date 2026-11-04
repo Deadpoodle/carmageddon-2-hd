@@ -23,20 +23,20 @@
 #include "keysets.h"
 #include "log.h"
 #include "options.h"
-#include "restart.h"
 #include "settings.h"
 
 namespace hdtab {
 namespace {
 
 uint8_t* const kScreen = (uint8_t*)0x63e528;  // the Graphics screen struct
-constexpr int kCount = 0x104, kEnter = 0x108, kExit = 0x10c, kSavedFocus = 0x118;
+constexpr int kCount = 0x104, kEnter = 0x108, kExit = 0x10c, kUpdate = 0x110, kSavedFocus = 0x118;
 constexpr int kItems = 0x130, kItemSize = 0x158, kRadios = 0x9be8, kRadioSize = 0x2c, kRadioCount = 0x9be4;
 constexpr int kStockItems = 53, kTextOwn = 0x404, kTextGraphics = 0xf9, kStub = 0x466450;
 int* const kFocus = (int*)0x688770;
 
 typedef int(__fastcall* ScreenFn)(void* s);
 const ScreenFn kGraphicsEnter = (ScreenFn)0x4747e0, kGraphicsExit = (ScreenFn)0x474850;
+const ScreenFn kGraphicsUpdate = (ScreenFn)0x470c20;
 const auto kAutoSize = (void(__fastcall*)(void*))0x4666f0;
 const auto kGetSelected = (int(__fastcall*)(void*, int))0x484f40;
 const auto kSetSelected = (void(__fastcall*)(void*, int, int))0x484f70;
@@ -56,7 +56,7 @@ int32_t& Field(int off) { return *(int32_t*)(kScreen + off); }
 // Items: 53 HD tab, 54 GRAPHICS tab, then each row: label + words.
 constexpr int kHdTab = 53, kGfxTab = 54, kFirstRow = 55;
 // The HD tab panel, beside the GRAPHICS tab (640x480 menu space).
-constexpr int kTabLeft = 252, kTabRight = 322, kTabTop = 51, kTabBottom = 84;  // screen, 640x480
+constexpr float kTabLeft = 253.5f, kTabRight = 322, kTabTop = 51, kTabBottom = 83.5f;  // screen, 640x480
 
 constexpr int kStockYonRow = 7, kStockYonFirst = 8, kStockYonLast = 11;  // Scenery Cut-off: label, words
 
@@ -87,7 +87,14 @@ const float kYon[4] = {0, 50.0f, 70.0f, 100.0f};  // Original keeps the game's o
 int g_first[kRowCount], g_words[kRowCount];  // first word item and word count per row
 int g_lastItem;
 bool g_hdPage;
-int g_atEnter[kRowCount];  // each row's value on entering the screen
+int g_atStart[kRowCount];  // each row's value when the game started
+bool g_started;
+
+// "Takes effect after a restart", shown on the HD page while a row differs from
+// what the game started with. The screen has no item to spare (99 and the
+// cursor's), so it borrows a stock row's label, hidden on that page anyway.
+constexpr int kNote = 2, kNoteX = 60, kNoteY = 318, kNoteFont = 3;
+Item g_noteStock;
 
 void Fill(Item& it, int text, const char* name, int font, int fontLit, int x, int y, int state, int callback) {
     memset(&it, 0, sizeof it);
@@ -132,7 +139,7 @@ void Append() {
     Field(kRadioCount) = kFirstGroup + kRowCount - 1;
     kAutoSize(kScreen);
     Item& hd = At(kHdTab);  // centred in its tab, level with GRAPHICS
-    hd.x = hd.origX = kTabLeft + (kTabRight - kTabLeft - hd.w) / 2;
+    hd.x = hd.origX = (int)(kTabLeft + (kTabRight - kTabLeft - hd.w) / 2);
     Log("hdtab: %d items appended (count %d)", i - kStockItems, i);
 }
 
@@ -215,6 +222,15 @@ void ShowPage(bool hd) {
     tab.state = hd ? 0 : 1;
     tab.visible = 1;
     for (int i = kGfxTab; i <= g_lastItem; i++) At(i).visible = hd ? 1 : 0;
+    At(kNote) = g_noteStock;
+    if (hd) {
+        Fill(At(kNote), kTextOwn, "Settings will take effect after the game restarts", kNoteFont, kNoteFont, kNoteX,
+             kNoteY, 0, kStub);
+        At(kNote).wrap = 1;  // a fixed size: the text isn't measured
+        At(kNote).w = 500;
+        At(kNote).h = 16;
+        At(kNote).visible = 0;
+    }
 }
 
 int __fastcall TabClick(void*) {
@@ -229,7 +245,11 @@ int __fastcall TabClick(void*) {
 // The HD tab's panel: spare menu model C-5 (used by no screen) scaled into a
 // tab beside the GRAPHICS tab of panel A-8, so it has the panel's own tinted
 // material and fades in with it (re/menus.md §5). Menu models are in a space
-// where screen x = 300 + 1.25x and screen y = 250 - 1.25y.
+// where screen x = 300 + 1.25x and screen y = 250 - 1.25y. The model is a box
+// rounded at all four corners. It stops where panel A starts, so the two read
+// as one panel: both are translucent, and any overlap shows as a dark line. Its
+// bottom right corner is squared off to meet the panel's straight edge; the
+// bottom left stays round, following the curve of panel A's GRAPHICS tab.
 
 uintptr_t* const kModelsC = (uintptr_t*)0x687058;  // C models, stride 0x10 (br_model* first)
 constexpr int kTabModel = 5, kScreenModelC = 0x12c;
@@ -249,9 +269,18 @@ void ShapeTabModel() {
     float ty0 = (250 - kTabBottom) / 1.25f, ty1 = (250 - kTabTop) / 1.25f;
     if (x1 - x0 < 1 || y1 - y0 < 1) return;
     if (x0 == tx0 && x1 == tx1) return;  // already shaped (the table persists until the front end reloads it)
+    float corner = 0.22f;  // of the height and (of the height again) the width: the rounded part
     for (int i = 0; i < n; i++) {
-        v[i * 10] = tx0 + (v[i * 10] - x0) * (tx1 - tx0) / (x1 - x0);
-        v[i * 10 + 1] = ty0 + (v[i * 10 + 1] - y0) * (ty1 - ty0) / (y1 - y0);
+        float x = v[i * 10], y = v[i * 10 + 1], r = corner * (y1 - y0);
+        v[i * 10] = tx0 + (x - x0) * (tx1 - tx0) / (x1 - x0);
+        v[i * 10 + 1] = ty0 + (y - y0) * (ty1 - ty0) / (y1 - y0);
+        if (y < y0 + r && x > x1 - r) {
+            v[i * 10] = tx1;
+            v[i * 10 + 1] = ty0;
+        } else if (y > y0 + 0.5f && y < y0 + r && x > x0 + 0.5f && x < x0 + r) {
+            v[i * 10] += 0.8f;  // the curve itself, a pixel in: panel A's curve is a little wider
+            v[i * 10 + 1] += 0.8f;
+        }
     }
     reinterpret_cast<void(__cdecl*)(void*, int)>(0x51f950)(model, 1);  // BrModelUpdate
     Log("hdtab: tab panel shaped from model C-5 (%d vertices)", n);
@@ -260,17 +289,38 @@ void ShapeTabModel() {
 int __fastcall Enter(void* s) {
     ShapeTabModel();
     int r = kGraphicsEnter(s);
-    if (Field(kCount) == kStockItems) Append();
+    if (Field(kCount) == kStockItems) {
+        g_noteStock = At(kNote);
+        Append();
+    }
     ShowPage(false);
     for (int row = 0; row < kRowCount; row++) {
-        int v = g_atEnter[row] = Current(row);
+        int v = Current(row);
+        if (!g_started) g_atStart[row] = v;
         kSetSelected(kScreen, kFirstGroup + row, v >= 0 ? g_first[row] + v : -1);
         SetRowState(row, 1);
     }
     At(g_first[kPedestrians] + 2).state = -1;  // Aliens wait for the original disc data
+    g_started = true;
     LockStockYon(Current(kDrawDistance) > 0);
     int saved = Field(kSavedFocus);
     if (saved < 0 || saved > g_lastItem || !At(saved).visible || At(saved).state <= 0) Field(kSavedFocus) = 1;
+    return r;
+}
+
+// Controls and Earlier groups apply at once. dgVoodoo2 reads its settings as the
+// game starts, and the display, draw distance and pedestrian patches are laid
+// down then, so a change to any other row waits for a restart.
+int __fastcall Update(void* s) {
+    int r = kGraphicsUpdate(s);
+    if (g_hdPage) {
+        bool differs = false;
+        for (int row = 0; row < kRowCount; row++) {
+            int v = Selected(row);
+            if (v >= 0 && v != g_atStart[row] && row != kControls && row != kEarlierGroups) differs = true;
+        }
+        At(kNote).visible = differs;
+    }
     return r;
 }
 
@@ -280,20 +330,15 @@ int __fastcall Exit(void* s) {
         kSetYon(kYon[dd]);
         for (int i = kStockYonFirst; i <= kStockYonLast; i++) At(i).selected = 0;
     }
+    At(kNote) = g_noteStock;  // the stock exit reads the screen's rows
     int r = kGraphicsExit(s);
-    // Controls and Earlier groups apply at once. dgVoodoo2 reads its settings as
-    // the game starts, and the display, draw distance and pedestrian patches are
-    // laid down then, so the others mean a restart (restart.h).
-    bool restart = false;
     for (int row = 0; row < kRowCount; row++) {
         int v = Selected(row);
         if (v >= 0) Store(row, v);
-        if (v >= 0 && v != g_atEnter[row] && row != kControls && row != kEarlierGroups) restart = true;
     }
     groups::SaveAutoLoad();  // the stock Auto Load row
     input::LoadBindings();  // Controls applies at once
     Log("hdtab: saved (draw distance %d)", dd);
-    if (restart) restart::Request();
     return r;
 }
 
@@ -319,6 +364,7 @@ void Install() {
     if (*(int32_t*)(kScreen + kScreenModelC) == 0) *(int32_t*)(kScreen + kScreenModelC) = kTabModel;
     *enter = (uint32_t)(uintptr_t)&Enter;
     *exit = (uint32_t)(uintptr_t)&Exit;
+    *(uint32_t*)(kScreen + kUpdate) = (uint32_t)(uintptr_t)&Update;
     Log("hdtab: installed");
 }
 

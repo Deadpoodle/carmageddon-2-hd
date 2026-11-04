@@ -173,7 +173,7 @@ Change these on the **HD** tab (Options → Settings → HD) or in `Carma2HD.ini
 | Pedestrians | **humans**, zombies | See [Features](#features). |
 | Earlier groups | **on**, off | On puts arrows beside the main menu's GROUP, to race finished groups again. Off is the original menu. |
 
-Controls and Earlier groups apply at once. The others can only change as the game starts, so leaving the HD tab with one of them changed saves and restarts the game by itself, straight back to your latest save in a few seconds. Changed during a race, the restart waits until the race is over and you're back at the main menu.
+Controls and Earlier groups apply at once. The others can only change as the game starts, so they take effect the next time you start it; the HD tab says so when one of them has changed.
 
 **Auto Load** is the game's own row on the Graphics tab (Options → Settings). It's on by default and kept in `Carma2HD.ini` as `[Game] AutoLoad`.
 

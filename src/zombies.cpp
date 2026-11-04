@@ -31,7 +31,9 @@
 
 #include <windows.h>
 
+#include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -48,7 +50,8 @@ namespace {
 // ---------------------------------------------------------------------------
 // Recolour (the numbers of tools/zombify.py)
 
-constexpr float kDesaturate = 0.15f, kGrime = 0.40f, kBloodRed = 1.6f;
+constexpr float kDesaturate = 0.15f, kGrime = 0.40f, kBloodRed = 1.6f, kFaceBand = 0.30f, kFaceMin = 0.08f,
+                kTone = 0.030f, kFaceWider = 1.8f, kTorsoNarrower = 0.5f, kTorsoLeft = 0.30f, kTorsoBottom = 0.75f;
 constexpr float kTint[3] = {0.96f, 0.96f, 0.92f}, kSkin[3] = {0.53f, 0.62f, 0.47f};
 constexpr int kBloodDiff = 40;
 
@@ -79,13 +82,37 @@ bool IsSkin(float r, float g, float b) {
     return hue >= 8 && hue <= 42 && saturation >= 0.12f && saturation <= 0.92f;
 }
 
-void Zombie(float* c, int x, int y) {
+// A skin's own flesh tone, as red and green shares of r + g + b. Every human skin
+// has the same layout (three faces across the top, a hand at the bottom left, the
+// arms down the left), so the faces give the tone; an animal has too little flesh
+// colour there, and then any flesh-like colour counts.
+struct Tone {
+    bool known;
+    float r, g;
+};
+
+// How much of a texel is skin, 0 to 1. Khaki and tan clothes look like flesh to
+// IsSkin, but their mix of colour differs from the face's. It fades out, so the
+// edge of the skin isn't speckled. The face band is nearly all skin, so it matches
+// more widely; the torso is nearly all clothes, so it matches more narrowly.
+float FleshShare(const float* c, int x, int y, int w, int h, const Tone& tone) {
+    if (!tone.known) return IsSkin(c[0], c[1], c[2]) ? 1.0f : 0.0f;
+    float sum = c[0] + c[1] + c[2];
+    if (c[0] < 0.12f || sum <= 0) return 0;
+    float reach = kTone;
+    if (y < h * kFaceBand) reach *= kFaceWider;
+    else if (x >= w * kTorsoLeft && y < h * kTorsoBottom) reach *= kTorsoNarrower;
+    float dr = fabsf(c[0] / sum - tone.r), dg = fabsf(c[1] / sum - tone.g), d = dr > dg ? dr : dg;
+    float share = (2 * reach - d) / reach;
+    return share < 0 ? 0 : share > 1 ? 1 : share;
+}
+
+void Zombie(float* c, int x, int y, int w, int h, const Tone& tone) {
     float lum = 0.30f * c[0] + 0.59f * c[1] + 0.11f * c[2];
-    bool skin = IsSkin(c[0], c[1], c[2]);
-    float k = Grime(x, y);
+    float f = FleshShare(c, x, y, w, h, tone), k = Grime(x, y);
     for (int i = 0; i < 3; i++) {
-        float v = skin ? kSkin[i] * (0.35f + 1.1f * lum) : (c[i] * (1 - kDesaturate) + lum * kDesaturate) * kTint[i];
-        v *= k;
+        float worn = (c[i] * (1 - kDesaturate) + lum * kDesaturate) * kTint[i];
+        float v = (kSkin[i] * (0.35f + 1.1f * lum) * f + worn * (1 - f)) * k;
         c[i] = v > 1 ? 1 : v;
     }
 }
@@ -120,6 +147,7 @@ inline int Height(uint8_t* pm) { return *(uint16_t*)(pm + 0x36); }
 // The skin last seen, to find the blood in its <NAME>B.
 std::string g_lastName;
 std::vector<uint16_t> g_last;
+Tone g_lastTone;
 int g_skins, g_bloodied, g_bloodArt;
 
 bool BloodTexel(uint16_t now, uint16_t was, const float* c) {
@@ -131,6 +159,23 @@ bool BloodTexel(uint16_t now, uint16_t was, const float* c) {
     return now != was && diff > kBloodDiff && c[0] > 0.2f && c[0] > kBloodRed * other;
 }
 
+Tone FaceTone(const uint16_t* px, int w, int h, int row) {
+    std::vector<float> rs, gs;
+    for (int y = 0; y < (int)(h * kFaceBand); y++)
+        for (int x = 0; x < w; x++) {
+            float c[3];
+            From565(px[y * row + x], c);
+            if (!IsSkin(c[0], c[1], c[2])) continue;
+            float sum = c[0] + c[1] + c[2];
+            rs.push_back(c[0] / sum);
+            gs.push_back(c[1] / sum);
+        }
+    if (rs.size() < w * h * kFaceBand * kFaceMin) return {};
+    std::nth_element(rs.begin(), rs.begin() + rs.size() / 2, rs.end());
+    std::nth_element(gs.begin(), gs.begin() + gs.size() / 2, gs.end());
+    return {true, rs[rs.size() / 2], gs[gs.size() / 2]};
+}
+
 void Skin(uint8_t* pm) {
     uint16_t* px = Pixels(pm);
     int w = Width(pm), h = Height(pm), row = Row(pm);
@@ -140,6 +185,7 @@ void Skin(uint8_t* pm) {
                (name.back() == 'B' || name.back() == 'b') && g_last.size() == (size_t)w * h;
     std::vector<uint16_t> before;
     if (!hit) before.resize((size_t)w * h);
+    Tone tone = hit ? g_lastTone : FaceTone(px, w, h, row);
     for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++) {
             uint16_t& p = px[y * row + x];
@@ -149,7 +195,7 @@ void Skin(uint8_t* pm) {
                 GreenBlood(c);
             } else {
                 if (!hit) before[(size_t)y * w + x] = p;
-                Zombie(c, x, y);
+                Zombie(c, x, y, w, h, tone);
             }
             p = To565(c);
         }
@@ -158,6 +204,7 @@ void Skin(uint8_t* pm) {
     } else {
         g_lastName = name;
         g_last.swap(before);
+        g_lastTone = tone;
         g_skins++;
     }
 }

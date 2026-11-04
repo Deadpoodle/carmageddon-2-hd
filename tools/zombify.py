@@ -19,6 +19,13 @@ DESATURATE = 0.15          # clothes: they keep their colour...
 TINT = (0.96, 0.96, 0.92)  # ...and just look worn
 SKIN = (0.53, 0.62, 0.47)  # skin: the dead grey-green, scaled by brightness
 GRIME = 0.40               # how dark the blotches get
+FACE_BAND = 0.30           # the share of a human skin's height holding its faces
+FACE_MIN = 0.08            # the share of that band that must be flesh, or it's an animal
+TONE = 0.030               # within this of the face's tone is flesh, fading out by twice it
+FACE_WIDER = 1.8           # and this much wider in the face band
+TORSO_NARROWER = 0.5       # and this much narrower on the torso...
+TORSO_LEFT = 0.30          # ...right of this share of the width (the arms are left of it)
+TORSO_BOTTOM = 0.75        # ...and above this share of the height
 BLOOD_DIFF = 40            # a texel this different in <NAME>B may be blood...
 BLOOD_RED = 1.6            # ...if red is this many times green and blue
 
@@ -52,14 +59,51 @@ def is_skin(r, g, b):
     return 8 <= hue <= 42 and 0.12 <= saturation <= 0.92
 
 
-def zombie(r, g, b, x, y):
+def flesh(w, h, rgb):
+    """This skin's own flesh tone, as (r, g) shares of r + g + b: the median over
+    the flesh-coloured texels of the top band, where every human skin has its
+    three faces. None if there are too few: an animal, with no faces there."""
+    rs, gs = [], []
+    for y in range(int(h * FACE_BAND)):
+        for x in range(w):
+            i = (y * w + x) * 3
+            r, g, b = rgb[i] / 255, rgb[i + 1] / 255, rgb[i + 2] / 255
+            if is_skin(r, g, b):
+                rs.append(r / (r + g + b))
+                gs.append(g / (r + g + b))
+    if len(rs) < w * h * FACE_BAND * FACE_MIN:
+        return None
+    return sorted(rs)[len(rs) // 2], sorted(gs)[len(gs) // 2]
+
+
+def flesh_share(r, g, b, x, y, w, h, tone):
+    """How much of a texel is skin, 0 to 1, by this texture's own tone: khaki and
+    tan clothes look like flesh to is_skin, but their mix of colour differs from
+    the face's. It fades out, so the edge of the skin isn't speckled. The face
+    band is nearly all skin, so it matches more widely; the torso is nearly all
+    clothes, so it matches more narrowly."""
+    if tone is None:
+        return 1.0 if is_skin(r, g, b) else 0.0
+    if r < 0.12 or r + g + b <= 0:
+        return 0.0
+    near = TONE
+    if y < h * FACE_BAND:
+        near *= FACE_WIDER
+    elif x >= w * TORSO_LEFT and y < h * TORSO_BOTTOM:
+        near *= TORSO_NARROWER
+    d = max(abs(r / (r + g + b) - tone[0]), abs(g / (r + g + b) - tone[1]))
+    return max(0.0, min(1.0, (2 * near - d) / near))
+
+
+def zombie(r, g, b, x, y, w, h, tone):
     lum = 0.30 * r + 0.59 * g + 0.11 * b
-    if is_skin(r, g, b):
-        c = [SKIN[i] * (0.35 + 1.1 * lum) for i in range(3)]
-    else:
-        c = [(v * (1 - DESATURATE) + lum * DESATURATE) * TINT[i] for i, v in enumerate((r, g, b))]
+    f = flesh_share(r, g, b, x, y, w, h, tone)
     k = grime(x, y)
-    return [min(1.0, v * k) for v in c]
+    c = []
+    for i, v in enumerate((r, g, b)):
+        worn = (v * (1 - DESATURATE) + lum * DESATURATE) * TINT[i]
+        c.append(min(1.0, (SKIN[i] * (0.35 + 1.1 * lum) * f + worn * (1 - f)) * k))
+    return c
 
 
 def green_blood(r, g, b):
@@ -70,6 +114,7 @@ def convert(m, base=None):
     """m's pixels as zombie RGB. base: the skin that m is the bloodied copy of."""
     w, h, rgb = pix.to_rgb(m)
     _, _, ref = pix.to_rgb(base) if base else (0, 0, None)
+    tone = flesh(w, h, ref or rgb)
     out = bytearray(len(rgb))
     for y in range(h):
         for x in range(w):
@@ -78,7 +123,7 @@ def convert(m, base=None):
             # Not every bloodied copy lines up with its skin, so it must be red too.
             blood = (ref and sum(abs(rgb[i + c] - ref[i + c]) for c in range(3)) > BLOOD_DIFF
                      and r > 0.2 and r > BLOOD_RED * max(g, b))
-            c = green_blood(r, g, b) if blood else zombie(r, g, b, x, y)
+            c = green_blood(r, g, b) if blood else zombie(r, g, b, x, y, w, h, tone)
             out[i:i + 3] = bytes(int(v * 255) for v in c)
     return w, h, bytes(out)
 
