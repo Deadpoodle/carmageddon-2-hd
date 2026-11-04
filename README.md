@@ -6,7 +6,7 @@ It is a binary patch: a small `dinput.dll` that the game loads at start-up and t
 
 It is tested with the Steam and GOG.com releases. Both ship the same game (`CARMA2_HW.EXE` 1.02a, identical byte for byte, as are its renderer drivers); only their CD-music players differ, and the patch plays the music with either.
 
-**[Download the latest release](https://github.com/Deadpoodle/carmageddon-2-hd/releases/latest)** (`carma2hd.zip`), then see [Installing](#installing), or [Steam Deck and Linux](#steam-deck-and-linux) for a one-line install there.
+**[Download the latest release](https://github.com/Deadpoodle/carmageddon-2-hd/releases/latest)** (`carma2hd.zip`), then see [Installing](#installing). It is a Windows patch: the Steam Deck and Proton are [work in progress](#steam-deck-and-linux).
 
 ## Contents
 
@@ -53,7 +53,7 @@ Versions and what changed in each: [CHANGELOG.md](CHANGELOG.md). The main menu s
 - Scenery drawn up to nearly six times as far as the original, and pedestrians, traffic and opponents' detailed models with it, so they no longer pop in just ahead of you.
 
 **Visuals**
-- Anti-aliasing (2x, 4x or 8x), 16x anisotropic texture filtering with mipmaps, and full-precision colour instead of 16-bit dithering. These three are dgVoodoo2's work, so they are Windows only (see [Steam Deck and Linux](#steam-deck-and-linux)).
+- Anti-aliasing (2x, 4x or 8x), 16x anisotropic texture filtering with mipmaps, and full-precision colour instead of 16-bit dithering. These three are dgVoodoo2's work, so they are Windows only.
 - A frame cap at your screen's refresh rate, never above 100 fps. Above 100 the game's physics run fast.
 - Cutscenes enlarged 4x with deband, light sharpening and Lanczos scaling, and shown as large as the screen allows (800x480 of a 16:9 frame instead of 640x384), on true black.
 - Sharper text and HUD art: their textures are enlarged 2x with Scale2x.
@@ -85,7 +85,7 @@ Versions and what changed in each: [CHANGELOG.md](CHANGELOG.md). The main menu s
 - Several copies on one PC, for testing.
 
 **Steam Deck and Linux**
-- Runs under Proton, with an install script that sets it all up (see [Steam Deck and Linux](#steam-deck-and-linux)). The Deck's 1280x800 screen gets the same wider view and HUD.
+- Work in progress, and not supported yet: see [Steam Deck and Linux](#steam-deck-and-linux) for what works and what is still broken under Proton.
 
 **Fixes**
 - Pedestrians animate smoothly at high frame rates. The original game's physics undid their animation between its 40 ms ticks, which made them twitch above about 30 fps.
@@ -102,7 +102,7 @@ All of this is on a new **HD** tab of the in-game Graphics screen (Options → S
 
 ## Installing
 
-The release zip, [`carma2hd.zip`](https://github.com/Deadpoodle/carmageddon-2-hd/releases/latest), holds `dinput.dll`, `dgVoodoo.conf`, the Steam Deck installer and these docs. On Windows:
+The release zip, [`carma2hd.zip`](https://github.com/Deadpoodle/carmageddon-2-hd/releases/latest), holds `dinput.dll`, `dgVoodoo.conf` and these docs. On Windows:
 
 1. Download `carma2hd.zip` from the [latest release](https://github.com/Deadpoodle/carmageddon-2-hd/releases/latest) and extract it (or build `dinput.dll` yourself, see [Building](#building)).
 2. Download [dgVoodoo2](https://github.com/dege-diosg/dgVoodoo2/releases) (tested with 2.87.5). From its `MS\x86` folder, take `DDraw.dll` and `D3DImm.dll`.
@@ -114,51 +114,26 @@ To remove the patch, delete those four files and `Carma2HD.ini`.
 
 ## Steam Deck and Linux
 
-The patch runs under Proton, Steam's Windows layer, on a Steam Deck or any Linux PC. Proton normally uses its own copy of `dinput.dll`, so the game needs a launch option that tells it to load the game folder's copy instead:
+**Work in progress. The patch is not supported on the Steam Deck or under Proton yet, and the install script has been withdrawn.** It is a Windows patch today. What follows is what has actually been tried, so that the work can be picked up rather than repeated.
+
+The game does start under Proton and reach a race, but enough is broken that it isn't worth calling supported:
+
+- **Game Mode is badly broken.** The picture appears in a small 640x480 box in the top left of the screen, with graphical glitches, and XInput never sees the controller at all.
+- **Desktop Mode is closer but still wrong.** The main menu loads, but the game's window loses foreground focus the moment it appears, so the screen stays black until the window is clicked back. The patch ignores the pad while the game isn't focused, so the controller goes dead with it.
+- **No music.** The store's `winmm.dll` ogg player never takes the CD request: it passes `MCI_OPEN` to the real MCI, which tries to load Windows' `mcicda.dll` and fails with error 266, so no `MUSIC\TrackNN.ogg` is ever opened. A CD-ROM drive in the Wine prefix makes no difference.
+- **Alt+Tab crashes the game**, writing through a bad pointer inside the BRender D3D driver. `SetWindowsHookExA` is not what the patch expects under Wine, so its Alt+Tab handling doesn't install either.
+
+**dgVoodoo2 cannot be used under Proton.** It is Windows-only software, and from 2.82 onwards its DirectDraw faults inside the first `IDirectDraw::CreateSurface` call under Wine, before any of this patch's code runs. A sixty-line program that does only `DirectDrawCreate` + `SetCooperativeLevel` + `CreateSurface` reproduces it, while the same sequence on Wine's own DirectDraw returns `S_OK`; it fails on Proton 7 through 11, on 2.87.5 and 2.87.6, release and debug builds, with no `dgVoodoo.conf` at all and with every setting tried. Its author has closed the same report as not a bug ([dgVoodoo2 issue 131](https://github.com/dege-diosg/dgVoodoo2/issues/131)), and versions old enough to work (2.81.3 and earlier) are no longer downloadable. `ddraw` in `WINEDLLOVERRIDES` is what pulls dgVoodoo2 in, so that override must not be set under Proton.
+
+Without dgVoodoo2 the game draws through Wine's own DirectDraw, and the settings that are dgVoodoo2's work alone do nothing: **Anti-aliasing**, **Textures** and **Colour**. The 3D picture is drawn at the 768x480 buffer and scaled up, rather than drawn at the screen's resolution.
+
+**To try it anyway**, copy only `dinput.dll` into the game folder (not dgVoodoo2's `DDraw.dll` or `D3DImm.dll`, which crash it on start-up), and set the game's launch option in Steam:
 
 ```
 WINEDLLOVERRIDES="dinput=n,b" %command%
 ```
 
-**Without dgVoodoo2.** On Windows the patch renders through dgVoodoo2; under Proton it does not, and must not. dgVoodoo2 is Windows-only software, and from 2.82 onwards its DirectDraw crashes under Wine inside the first `IDirectDraw::CreateSurface` call, before any of this patch's code runs. `DirectDrawCreate` + `SetCooperativeLevel` + `CreateSurface` in a sixty-line test program is enough to reproduce it, so it happens on every Proton version and with every `dgVoodoo.conf`; its author has closed that report as not a bug ([dgVoodoo2 issue 131](https://github.com/dege-diosg/dgVoodoo2/issues/131)). Adding `ddraw` to `WINEDLLOVERRIDES` is what pulls dgVoodoo2 in, which is why the override above lists only `dinput`.
-
-So under Proton the game draws through Wine's own DirectDraw, and the renderer settings that are dgVoodoo2's work alone have no effect: **Anti-aliasing**, **Textures** and **Colour**. The 3D picture is drawn at the 768x480 buffer and scaled up to the screen, rather than drawn at the screen's own resolution. Everything else in the patch works as it does on Windows: the wide view and HUD, draw distance, the 4x cutscenes, sharp text and HUD art, the controller, the menu fixes and network play.
-
-**Installing with the script** (in Desktop Mode): open **Konsole** and paste this line:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Deadpoodle/carmageddon-2-hd/main/tools/install-steamdeck.sh | bash
-```
-
-1. The script:
-   - finds the game in any Steam library, on internal storage or an SD card;
-   - downloads the [latest release](https://github.com/Deadpoodle/carmageddon-2-hd/releases/latest) and copies in its `dinput.dll`;
-   - takes out `DDraw.dll`, `D3DImm.dll` and `dgVoodoo.conf` if an older version of this script installed them, since they crash the game under Proton;
-   - sets the launch option above, keeping any options already there and dropping `ddraw` and `d3dimm` from it.
-2. Steam rewrites its settings when it exits, so the launch option can only be set while Steam is closed. If Steam is running, the script asks you to exit it (the Steam icon in the taskbar → Exit), then press Enter. Type `s` instead to skip, and paste the line above into **Carmageddon 2 → Properties → General → Launch Options** yourself.
-3. Go back to Gaming Mode and start the game as usual.
-
-Running the line again updates the patch to the latest release. To remove the patch, run it with `--uninstall`: it removes the patch files and takes its part out of the launch option.
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Deadpoodle/carmageddon-2-hd/main/tools/install-steamdeck.sh | bash -s -- --uninstall
-```
-
-Without internet on the Deck, copy `carma2hd.zip` over, extract it, and run `bash install-steamdeck.sh` from the extracted folder: it then installs that copy instead. Nothing else has to be downloaded.
-
-**The GOG release on Linux** (through Heroic, Lutris or another Wine launcher): the script is for Steam's copy, so copy only `dinput.dll` into the game folder (not dgVoodoo2's files, see above), then add `WINEDLLOVERRIDES` with the value `dinput=n,b` to the game's environment variables in the launcher.
-
-**On the Deck:**
-- **Screen:** `Resolution=auto` picks the Deck's 1280x800. Its 16:10 shape gets a 768x480 Hor+ view, with the HUD spread across the width. Docked, auto picks the external display's resolution instead.
-- **Frame rate:** auto follows the screen's refresh rate: 60 on the LCD Deck, 90 on the OLED.
-- **Controls:** use Steam Input's **Gamepad** layout. The patch then reads the Deck as an Xbox pad (see [Controls](#controls)), in races and in every menu.
-- **Typing** a driver name or an IP address: Steam + X brings up the on-screen keyboard.
-
-**If it doesn't work:**
-- **No `Carma2HD.log` in the game folder after a start:** the patch didn't load. Check the launch option.
-- **The game quits a second after it starts, and the log ends with `CRASH: ... DDRAW.dll`:** dgVoodoo2 is being loaded. Take `DDraw.dll`, `D3DImm.dll` and `dgVoodoo.conf` out of the game folder and `ddraw`/`d3dimm` out of the launch option, or just run the install line again.
-- **The log says "DirectDraw is ... not dgVoodoo2's":** expected under Proton, and not a problem; the game draws through Wine's DirectDraw. The "640x480" in that line is wrong here, as the wide buffer is still patched in.
-- **The log's first lines say "running under Wine":** the patch is loaded. It names Proton's Wine version there.
+`Carma2HD.log` in the game folder says what the patch did; its first lines name Proton's Wine version. For the GOG release through Heroic, Lutris or another Wine launcher, do the same and put `WINEDLLOVERRIDES` with the value `dinput=n,b` in the game's environment variables.
 
 ## Settings
 
