@@ -18,6 +18,7 @@
 #include <cstring>
 #include <string>
 
+#include "groups.h"
 #include "input.h"
 #include "keysets.h"
 #include "log.h"
@@ -75,10 +76,11 @@ const Row kRows[] = {
     {"Textures:", 240, {"Original", "Smooth", "Sharpest"}, {250, 330, 410}},
     {"Colour:", 260, {"16-bit", "Smooth"}, {250, 330}},
     {"Frame rate:", 280, {"60", "Auto"}, {250, 330}},
+    {"Earlier groups:", 300, {"On", "Off"}, {250, 330}},
 };
-constexpr int kRowCount = 10, kFirstGroup = 15;
+constexpr int kRowCount = 11, kFirstGroup = 15;  // 99 items in all (the struct has room for 100)
 enum { kResolution, kWidescreen, kHudWidth, kControls, kPedestrians, kDrawDistance, kAntialiasing, kTextures,
-       kColour, kFrameRate };
+       kColour, kFrameRate, kEarlierGroups };
 const float kYon[4] = {0, 50.0f, 70.0f, 100.0f};  // Original keeps the game's own
 
 int g_first[kRowCount], g_words[kRowCount];  // first word item and word count per row
@@ -164,6 +166,7 @@ int Current(int r) {
     case kTextures: return Index(settings::Get("Visuals", "Textures", "sharpest"), {"original", "smooth", "sharpest"});
     case kColour: return Index(settings::Get("Visuals", "Colour", "smooth"), {"16-bit", "smooth"});
     case kFrameRate: return Index(settings::Get("Visuals", "FrameRate", "auto"), {"60", "auto"});
+    case kEarlierGroups: return settings::Get("Game", "EarlierGroups", "1") == "0" ? 1 : 0;
     }
     return -1;
 }
@@ -182,6 +185,7 @@ void Store(int r, int v) {
     case kTextures: settings::Set("Visuals", "Textures", kRows[r].words[v]); break;
     case kColour: settings::Set("Visuals", "Colour", kRows[r].words[v]); break;
     case kFrameRate: settings::Set("Visuals", "FrameRate", kRows[r].words[v]); break;
+    case kEarlierGroups: settings::Set("Game", "EarlierGroups", v == 0 ? "1" : "0"); break;
     }
 }
 
@@ -278,6 +282,7 @@ int __fastcall Exit(void* s) {
         int v = Selected(row);
         if (v >= 0 && row != kPedestrians) Store(row, v);
     }
+    groups::SaveAutoLoad();  // the stock Auto Load row
     input::LoadBindings();  // Controls applies at once
     Log("hdtab: saved (draw distance %d)", dd);
     return r;

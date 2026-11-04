@@ -15,6 +15,7 @@
 #include "display.h"
 #include "fixes.h"
 #include "frontend.h"
+#include "groups.h"
 #include "hdtab.h"
 #include "icons.h"
 #include "headless.h"
@@ -473,6 +474,7 @@ void Start() {
     wrecks::Install();
     peds::Install();
     actors::Install();
+    groups::Install();
     debug::Install();
     fixes::Install();
     music::Install();

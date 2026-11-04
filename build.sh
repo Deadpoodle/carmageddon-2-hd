@@ -15,7 +15,7 @@ mkdir -p build
 # CANCEL; Load Game's Esc sometimes did nothing).
 "$CXX" -std=c++17 -O2 -msse2 -mfpmath=sse -Wall -Wextra -Wno-cast-function-type -fno-indirect-inlining -shared -static -s -Wl,--no-insert-timestamp \
     -o build/dinput.dll src/main.cpp src/proxy.cpp src/loader.cpp src/headless.cpp src/input.cpp src/capture.cpp \
-    src/settings.cpp src/dgvconf.cpp src/display.cpp src/wide.cpp src/frontend.cpp src/hdtab.cpp src/controller.cpp src/options.cpp src/driver.cpp src/movie.cpp src/music.cpp src/netshim.cpp src/netmenu.cpp src/quit.cpp src/audio.cpp src/keysets.cpp src/sharptext.cpp src/icons.cpp src/wrecks.cpp src/menukeys.cpp src/peds.cpp src/actors.cpp src/debug.cpp src/fixes.cpp src/publicaddr.cpp \
+    src/settings.cpp src/dgvconf.cpp src/display.cpp src/wide.cpp src/frontend.cpp src/hdtab.cpp src/controller.cpp src/options.cpp src/driver.cpp src/movie.cpp src/music.cpp src/netshim.cpp src/netmenu.cpp src/quit.cpp src/audio.cpp src/keysets.cpp src/sharptext.cpp src/icons.cpp src/wrecks.cpp src/menukeys.cpp src/peds.cpp src/actors.cpp src/groups.cpp src/debug.cpp src/fixes.cpp src/publicaddr.cpp \
     src/dinput.def \
     -lole32 -lws2_32 -lwinhttp -lwinmm -ldxguid -luuid -luser32 -lkernel32
 echo "built build/dinput.dll"

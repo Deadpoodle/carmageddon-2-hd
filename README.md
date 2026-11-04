@@ -69,6 +69,10 @@ Versions and what changed in each: [CHANGELOG.md](CHANGELOG.md). The main menu s
   - **Net game options:** Left/Right on Starting Credit and Target change them.
   - **Lobby:** Esc (B) moves to ABORT GAME, and Esc again aborts.
 
+**Career**
+- Finished race groups can be raced again. Arrows either side of **GROUP** on the main menu (or Left/Right with GROUP selected) go back through the groups you have finished, mission included. A race from an earlier group counts as a replay: you stay in the group you have reached, and winning an old mission doesn't skip you ahead. The original only showed these arrows once the whole game was finished.
+- The game carries on where you left off: it loads your latest save when it starts (the Graphics screen's **Auto Load**, now on by default). The original started a new game every time unless Auto Load was switched on.
+
 **Network**
 - LAN games on modern Windows. The game only speaks IPX, which Windows no longer has; the patch carries it over UDP.
 - Join a game over the internet by typing the host's address on the Network screen. Three or more players work too: the host's copy passes on what the joining players send each other.
@@ -162,6 +166,9 @@ Change these on the **HD** tab (Options → Settings → HD) or in `Carma2HD.ini
 | Textures | original, smooth, **sharpest** | Smooth is trilinear with mipmaps. Sharpest is 16x anisotropic with mipmaps. |
 | Colour | 16-bit, **smooth** | Smooth is full-precision colour. 16-bit is the original dithered look. |
 | Frame rate | 60, **auto** | Auto is your screen's refresh rate, capped at 100. |
+| Earlier groups | **on**, off | On puts arrows beside the main menu's GROUP, to race finished groups again. Off is the original menu. |
+
+**Auto Load** is the game's own row on the Graphics tab (Options → Settings). It's on by default and kept in `Carma2HD.ini` as `[Game] AutoLoad`.
 
 These are only in `Carma2HD.ini`:
 - `[Display]`: `Fullscreen`. `borderless` (the default) is a screen-size window: no display mode change, and Windows can draw over it. `exclusive` gives the screen to the game alone.

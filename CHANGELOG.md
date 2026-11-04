@@ -4,6 +4,10 @@ Carmageddon II HD follows [semantic versioning](https://semver.org/). Until a fi
 
 The game itself is the Steam release, which labels itself `v1.02a`. It is the same build as the official "Super Patch V2.0" (both game exes were built on 30 November 1998). Steam's copy has its CD protection removed, plus an extra import for its CD-music player.
 
+## 0.22.0 (2026-11-04)
+- Finished race groups can be raced again. Arrows beside **GROUP** on the main menu page back through the groups you have finished; with GROUP selected, Left/Right (or the D-pad) do the same. The race list changes as you go, and a finished group's mission can be raced again. A race from an earlier group is a replay: you stay in the group you have reached, and winning an old mission no longer moves you on a group (the stock arrows, shown only after the whole game is finished, moved your progress). HD tab: **Earlier groups** (`[Game] EarlierGroups`, on by default).
+- The game loads your latest save when it starts. This is the Graphics screen's own **Auto Load** row, now on by default (`[Game] AutoLoad`); the original started a new game every time unless it was switched on.
+
 ## 0.21.0 (2026-11-03)
 - Pedestrians, traffic and opponents' detailed models no longer pop in just ahead of you. They follow the Draw distance setting like the scenery. At Max, pedestrians come alive out to 30 units instead of 12, traffic is drawn out to 43 instead of 15, and up to 64 traffic cars move at once instead of 12. Opponents switch to their full models at 57 units instead of 20. Original keeps the game's own distances.
 - The debug overlay counts traffic: drawn / moving.
