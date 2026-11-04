@@ -4,6 +4,9 @@ Carmageddon II HD follows [semantic versioning](https://semver.org/). Until a fi
 
 The game itself is the Steam release, which labels itself `v1.02a`. It is the same build as the official "Super Patch V2.0" (both game exes were built on 30 November 1998). Steam's copy has its CD protection removed, plus an extra import for its CD-music player.
 
+## 0.22.1 (2026-11-04)
+- The right arrow beside GROUP no longer has a faint red box around it.
+
 ## 0.22.0 (2026-11-04)
 - Finished race groups can be raced again. Arrows beside **GROUP** on the main menu page back through the groups you have finished; with GROUP selected, Left/Right (or the D-pad) do the same. The race list changes as you go, and a finished group's mission can be raced again. A race from an earlier group is a replay: you stay in the group you have reached, and winning an old mission no longer moves you on a group (the stock arrows, shown only after the whole game is finished, moved your progress). HD tab: **Earlier groups** (`[Game] EarlierGroups`, on by default).
 - The game loads your latest save when it starts. This is the Graphics screen's own **Auto Load** row, now on by default (`[Game] AutoLoad`); the original started a new game every time unless it was switched on.

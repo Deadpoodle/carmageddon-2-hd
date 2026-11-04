@@ -137,9 +137,10 @@ void KeepProgress() {
 // picture of any other size to a power of two, so neither a smaller quad nor
 // a smaller picture shows the whole arrow. Instead each copy is 16x32 with the
 // arrow drawn 10x20 in its middle (each pixel the average of the source area,
-// per 4-bit channel) and the rest the source's empty corner pixel; the
-// menu-image table holds the copies while the main menu's buttons are built,
-// right after its enter.
+// per 4-bit channel) and the rest the source's most transparent pixel (alpha
+// is the top nibble; the right arrow's top-left corner is part of its edge, so
+// a corner won't do). The menu-image table holds the copies while the main
+// menu's buttons are built, right after its enter.
 const auto kAllocate = (uint8_t*(__cdecl*)(int, int, int, void*, int))0x538d80;  // BrPixelmapAllocate
 uint8_t** const kMenuImages = (uint8_t**)0x686850;
 constexpr int kRgba4444 = 0x12;
@@ -154,7 +155,12 @@ uint8_t* Shrink(uint8_t* src) {
     if (!dst) return nullptr;
     const uint8_t* sp = *(uint8_t**)(src + 8);
     int srow = *(int16_t*)(src + 0x28), drow = *(int16_t*)(dst + 0x28);
-    uint16_t empty = *(const uint16_t*)sp;
+    uint16_t empty = 0xffff;
+    for (int y = 0; y < kImageH; y++)
+        for (int x = 0; x < kImageW; x++) {
+            uint16_t p = *(const uint16_t*)(sp + y * srow + x * 2);
+            if (p >> 12 < empty >> 12) empty = p;
+        }
     for (int y = 0; y < kImageH; y++)
         for (int x = 0; x < kImageW; x++) *(uint16_t*)(*(uint8_t**)(dst + 8) + y * drow + x * 2) = empty;
     uint8_t* dp = *(uint8_t**)(dst + 8) + kInsetY * drow + kInsetX * 2;
