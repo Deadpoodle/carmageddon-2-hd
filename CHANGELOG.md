@@ -4,6 +4,11 @@ Carmageddon II HD follows [semantic versioning](https://semver.org/). Until a fi
 
 The game itself is the Steam release, which labels itself `v1.02a`. It is the same build as the official "Super Patch V2.0" (both game exes were built on 30 November 1998). Steam's copy has its CD protection removed, plus an extra import for its CD-music player.
 
+## 0.28.1 (2026-11-04)
+- Steam Deck and Linux support is withdrawn as work in progress, and `tools/install-steamdeck.sh` is removed. It was never tested on a Deck, and testing on one found it broken in ways the script could not paper over. The README now records what was tried, so the work can be picked up rather than repeated. Windows is untouched: this release changes no game code.
+- dgVoodoo2 turns out to be unusable under Proton, which is what crashed the game a second after start-up. It is Windows-only software: from 2.82 onwards its DirectDraw faults inside the first `IDirectDraw::CreateSurface` call under Wine, before any of our code runs, on every Proton version (7 to 11 tested), on 2.87.5 and 2.87.6, release and debug builds, with no `dgVoodoo.conf` at all and with every setting tried. A sixty-line `DirectDrawCreate` + `SetCooperativeLevel` + `CreateSurface` program reproduces it, while the same calls on Wine's own DirectDraw return `S_OK`; its author has closed the same report as not a bug ([dgVoodoo2 issue 131](https://github.com/dege-diosg/dgVoodoo2/issues/131)), and the versions old enough to work are no longer downloadable. `ddraw` in `WINEDLLOVERRIDES` is what pulled it in.
+- Still broken under Proton, and why the Deck isn't supported: Game Mode draws the picture in a 640x480 box in the top left with glitches and no XInput at all; in Desktop Mode the main menu loads but the window loses foreground focus as it appears, leaving a black screen and a dead pad with it; the CD music never plays, because the store's `winmm.dll` passes `MCI_OPEN` to the real MCI instead of taking it, and that wants Windows' `mcicda.dll` (error 266); and Alt+Tab crashes the game inside the BRender D3D driver.
+
 ## 0.28.0 (2026-11-04)
 - Skip intro on the HD tab (`[Game] SkipIntro`, off by default) skips the opening films, without touching any game file. The end-of-game film still plays.
 
