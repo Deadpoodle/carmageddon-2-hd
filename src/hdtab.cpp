@@ -82,7 +82,7 @@ const Row kRows[] = {
 constexpr int kRowCount = 11, kFirstGroup = 15;  // 99 items in all (the struct has room for 100)
 enum { kResolution, kWidescreen, kHudWidth, kControls, kPedestrians, kDrawDistance, kAntialiasing, kTextures,
        kColour, kFrameRate, kEarlierGroups };
-const float kYon[4] = {0, 50.0f, 70.0f, 100.0f};  // Original keeps the game's own
+const float kYon[4] = {0, 70.0f, 100.0f, 200.0f};  // Original keeps the game's own
 
 int g_first[kRowCount], g_words[kRowCount];  // first word item and word count per row
 int g_lastItem;

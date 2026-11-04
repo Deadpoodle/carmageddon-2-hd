@@ -4,6 +4,9 @@ Carmageddon II HD follows [semantic versioning](https://semver.org/). Until a fi
 
 The game itself is the Steam release, which labels itself `v1.02a`. It is the same build as the official "Super Patch V2.0" (both game exes were built on 30 November 1998). Steam's copy has its CD protection removed, plus an extra import for its CD-music player.
 
+## 0.27.0 (2026-11-04)
+- Draw distance goes twice as far. Max is now `Yon` 200, with pedestrians alive out to 60 units, traffic drawn out to 86 and opponents' full models out to 114. Further is the old Max, and Far is 70 with pedestrians at twice the original distance.
+
 ## 0.26.1 (2026-11-04)
 - The GRAPHICS and HD tabs are divided by one straight line.
 

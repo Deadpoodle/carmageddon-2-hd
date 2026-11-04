@@ -13,15 +13,16 @@
 //   with another test, so the constants themselves stay). At most 12 drones
 //   move and 10 are drawn at once (imm8 at 0x44f7ee, 0x45152e; 0x451847,
 //   0x452712); those are plain counters (incremented and decremented, never
-//   indexes), so the caps go up to 64 (at Max about 30 are drawn and 40 move in a city).
+//   indexes), so the caps go up to 64 (at Yon 100 about 30 are drawn and 40 move in a city).
 // - Opponents are culled with the yon already, but swap their simple model
 //   for the full one at sqrt(8 x 50) = 20 units: the car files' min_dist_squared
 //   times the factor row for the hardware renderer (0x58f6c4..0x58f6d0: 50, 5,
 //   2.5, 1.5 by car detail level). The row is scaled by k^2.
 //
-// k follows [Display] DrawDistance: Yon / 35 (Original 1, Far 1.43, Further 2,
-// Max 2.86); pedestrians use a gentler 1, 1.5, 2, 2.5 (their cost grows with
-// the area). Original changes nothing.
+// k follows [Display] DrawDistance: Yon / 35 (Original 1, Far 2, Further 2.86,
+// Max 5.71); pedestrians use a gentler 1, 2, 2.5, 5 (their cost grows with the
+// area). Original changes nothing. A hidden race at Max held 100 fps; so did one
+// at Yon 400.
 #include "actors.h"
 
 #include <windows.h>
@@ -67,9 +68,9 @@ bool Cap(uintptr_t imm, uint8_t old, uint8_t now) { return hook::Patch(imm, &old
 void Install() {
     std::string dd = settings::Get("Display", "DrawDistance", "max");
     float k = 1, kp = 1;
-    if (_stricmp(dd.c_str(), "far") == 0) k = 50.0f / 35, kp = 1.5f;
-    else if (_stricmp(dd.c_str(), "further") == 0) k = 70.0f / 35, kp = 2.0f;
-    else if (_stricmp(dd.c_str(), "max") == 0) k = 100.0f / 35, kp = 2.5f;
+    if (_stricmp(dd.c_str(), "far") == 0) k = 70.0f / 35, kp = 2.0f;
+    else if (_stricmp(dd.c_str(), "further") == 0) k = 100.0f / 35, kp = 2.5f;
+    else if (_stricmp(dd.c_str(), "max") == 0) k = 200.0f / 35, kp = 5.0f;
     if (k == 1) {
         Log("actors: draw distance %s: pedestrians, traffic and opponents as the original", dd.c_str());
         return;
