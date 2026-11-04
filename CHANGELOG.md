@@ -4,6 +4,9 @@ Carmageddon II HD follows [semantic versioning](https://semver.org/). Until a fi
 
 The game itself is the Steam release, which labels itself `v1.02a`. It is the same build as the official "Super Patch V2.0" (both game exes were built on 30 November 1998). Steam's copy has its CD protection removed, plus an extra import for its CD-music player.
 
+## 0.26.1 (2026-11-04)
+- The GRAPHICS and HD tabs are divided by one straight line.
+
 ## 0.26.0 (2026-11-04)
 - The game no longer restarts itself when HD tab settings change. The tab now shows "Settings will take effect after the game restarts" while a setting differs from what the game started with.
 - Zombies: only skin changes now. Each skin's flesh tone is taken from its own faces, so khaki and tan clothes no longer turn grey-green with it.

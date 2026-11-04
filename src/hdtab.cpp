@@ -56,7 +56,7 @@ int32_t& Field(int off) { return *(int32_t*)(kScreen + off); }
 // Items: 53 HD tab, 54 GRAPHICS tab, then each row: label + words.
 constexpr int kHdTab = 53, kGfxTab = 54, kFirstRow = 55;
 // The HD tab panel, beside the GRAPHICS tab (640x480 menu space).
-constexpr float kTabLeft = 253.5f, kTabRight = 322, kTabTop = 51, kTabBottom = 83.5f;  // screen, 640x480
+constexpr float kTabLeft = 253.61f, kTabRight = 322, kTabTop = 51, kTabBottom = 83.47f;  // screen, 640x480
 
 constexpr int kStockYonRow = 7, kStockYonFirst = 8, kStockYonLast = 11;  // Scenery Cut-off: label, words
 
@@ -246,13 +246,47 @@ int __fastcall TabClick(void*) {
 // tab beside the GRAPHICS tab of panel A-8, so it has the panel's own tinted
 // material and fades in with it (re/menus.md §5). Menu models are in a space
 // where screen x = 300 + 1.25x and screen y = 250 - 1.25y. The model is a box
-// rounded at all four corners. It stops where panel A starts, so the two read
-// as one panel: both are translucent, and any overlap shows as a dark line. Its
-// bottom right corner is squared off to meet the panel's straight edge; the
-// bottom left stays round, following the curve of panel A's GRAPHICS tab.
+// rounded at all four corners. It shares panel A's edges exactly, so the two
+// read as one panel: both are translucent, and any overlap shows as a dark line.
+// Its bottom right corner is squared off to meet the panel's straight edge; the
+// ten vertices of its bottom left corner are put on the ten of panel A's curve
+// there. Spare model B-10 (no screen uses it) is squeezed into a straight strip
+// over the join, as the separator between the tabs.
 
 uintptr_t* const kModelsC = (uintptr_t*)0x687058;  // C models, stride 0x10 (br_model* first)
-constexpr int kTabModel = 5, kScreenModelC = 0x12c;
+uintptr_t* const kModelsB = (uintptr_t*)0x687188;
+constexpr int kTabModel = 5, kScreenModelC = 0x12c, kStripModel = 10, kScreenModelB = 0x128;
+constexpr float kStripLeft = 252.6f, kStripRight = 254.7f, kStripTop = 58;  // down to kTabBottom
+
+// The model's bottom left corner, from the bottom edge up the left side, and
+// panel A-8's curve there (vertices 8, 262, 257, 261, 255, 256, 260, 258, 259, 7).
+const int kCorner[10] = {11, 34, 30, 35, 28, 29, 33, 31, 32, 10};
+const float kCurve[10][2] = {{263.19f, 83.47f}, {261.76f, 83.27f}, {260.17f, 82.89f}, {258.76f, 82.29f},
+                             {257.09f, 81.16f}, {255.92f, 80.01f}, {255.00f, 78.60f}, {254.21f, 76.89f},
+                             {253.85f, 75.62f}, {253.61f, 73.84f}};
+const auto kModelUpdate = reinterpret_cast<void(__cdecl*)(void*, int)>(0x51f950);  // BrModelUpdate
+
+void ShapeStrip() {
+    uint8_t* model = (uint8_t*)kModelsB[kStripModel * 4];
+    if (!model) return;
+    float* v = *(float**)(model + 8);
+    int n = *(uint16_t*)(model + 0x10);
+    if (!v || n <= 0) return;
+    float x0 = 1e9f, x1 = -1e9f, y0 = 1e9f, y1 = -1e9f;
+    for (int i = 0; i < n; i++) {
+        float x = v[i * 10], y = v[i * 10 + 1];
+        x0 = x < x0 ? x : x0, x1 = x > x1 ? x : x1, y0 = y < y0 ? y : y0, y1 = y > y1 ? y : y1;
+    }
+    float left = (kStripLeft - 300) / 1.25f, right = (kStripRight - 300) / 1.25f;
+    float bottom = (250 - kTabBottom) / 1.25f, top = (250 - kStripTop) / 1.25f;
+    if (x0 == left && x1 == right) return;  // already shaped
+    for (int i = 0; i < n; i++) {  // every vertex to a corner: the model's outline is no rectangle
+        v[i * 10] = v[i * 10] < (x0 + x1) / 2 ? left : right;
+        v[i * 10 + 1] = v[i * 10 + 1] < (y0 + y1) / 2 ? bottom : top;
+    }
+    kModelUpdate(model, 0x7fff);
+    Log("hdtab: tab separator shaped from model B-10 (%d vertices)", n);
+}
 
 void ShapeTabModel() {
     uint8_t* model = (uint8_t*)kModelsC[kTabModel * 4];
@@ -269,7 +303,7 @@ void ShapeTabModel() {
     float ty0 = (250 - kTabBottom) / 1.25f, ty1 = (250 - kTabTop) / 1.25f;
     if (x1 - x0 < 1 || y1 - y0 < 1) return;
     if (x0 == tx0 && x1 == tx1) return;  // already shaped (the table persists until the front end reloads it)
-    float corner = 0.22f;  // of the height and (of the height again) the width: the rounded part
+    float corner = 0.22f;  // of the model's height: the rounded part
     for (int i = 0; i < n; i++) {
         float x = v[i * 10], y = v[i * 10 + 1], r = corner * (y1 - y0);
         v[i * 10] = tx0 + (x - x0) * (tx1 - tx0) / (x1 - x0);
@@ -277,17 +311,20 @@ void ShapeTabModel() {
         if (y < y0 + r && x > x1 - r) {
             v[i * 10] = tx1;
             v[i * 10 + 1] = ty0;
-        } else if (y > y0 + 0.5f && y < y0 + r && x > x0 + 0.5f && x < x0 + r) {
-            v[i * 10] += 0.8f;  // the curve itself, a pixel in: panel A's curve is a little wider
-            v[i * 10 + 1] += 0.8f;
         }
     }
-    reinterpret_cast<void(__cdecl*)(void*, int)>(0x51f950)(model, 1);  // BrModelUpdate
+    if (n == 44)
+        for (int i = 0; i < 10; i++) {
+            v[kCorner[i] * 10] = (kCurve[i][0] - 300) / 1.25f;
+            v[kCorner[i] * 10 + 1] = (250 - kCurve[i][1]) / 1.25f;
+        }
+    kModelUpdate(model, 1);
     Log("hdtab: tab panel shaped from model C-5 (%d vertices)", n);
 }
 
 int __fastcall Enter(void* s) {
     ShapeTabModel();
+    ShapeStrip();
     int r = kGraphicsEnter(s);
     if (Field(kCount) == kStockItems) {
         g_noteStock = At(kNote);
@@ -362,6 +399,7 @@ void Install() {
         return;
     }
     if (*(int32_t*)(kScreen + kScreenModelC) == 0) *(int32_t*)(kScreen + kScreenModelC) = kTabModel;
+    if (*(int32_t*)(kScreen + kScreenModelB) == 0) *(int32_t*)(kScreen + kScreenModelB) = kStripModel;
     *enter = (uint32_t)(uintptr_t)&Enter;
     *exit = (uint32_t)(uintptr_t)&Exit;
     *(uint32_t*)(kScreen + kUpdate) = (uint32_t)(uintptr_t)&Update;
