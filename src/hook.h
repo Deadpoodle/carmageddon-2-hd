@@ -4,6 +4,8 @@
 
 #include <cstdint>
 #include <cstring>
+#include <initializer_list>
+#include <utility>
 
 namespace hook {
 
@@ -91,6 +93,27 @@ inline void* Detour(uintptr_t addr, const uint8_t* expect, size_t n, const void*
     memcpy(jmp + 1, &to, 4);
     if (!Patch(addr, expect, jmp, n)) return nullptr;
     return tramp;
+}
+
+// Write a rel32 at `at` (the operand of a jump or call) that reaches `to`.
+inline void Rel32(uint8_t* at, uintptr_t to) {
+    int32_t rel = (int32_t)(to - ((uintptr_t)at + 4));
+    memcpy(at, &rel, 4);
+}
+
+// Replace the n (5..8) bytes at site with a jump to a copy of stub, its rel32s
+// at the given offsets aimed at the given addresses.
+inline bool Divert(uintptr_t site, const uint8_t* old, size_t n, const uint8_t* stub, size_t size,
+                   std::initializer_list<std::pair<size_t, uintptr_t>> jumps) {
+    if (!Matches(site, old, n)) return false;
+    uint8_t* code = (uint8_t*)VirtualAlloc(nullptr, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!code) return false;
+    memcpy(code, stub, size);
+    for (const auto& j : jumps) Rel32(code + j.first, j.second);
+    uint8_t jump[8] = {0xe9, 0, 0, 0, 0, 0x90, 0x90, 0x90};
+    int32_t rel = (int32_t)((uintptr_t)code - (site + 5));  // relative to where it is written
+    memcpy(jump + 1, &rel, 4);
+    return Patch(site, old, jump, n);
 }
 
 }  // namespace hook

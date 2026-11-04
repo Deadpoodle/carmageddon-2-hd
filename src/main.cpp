@@ -36,6 +36,7 @@
 #include "sharptext.h"
 #include "version.h"
 #include "wrecks.h"
+#include "zombies.h"
 #include "menukeys.h"
 
 namespace {
@@ -475,6 +476,7 @@ void Start() {
     peds::Install();
     actors::Install();
     groups::Install();
+    zombies::Install();  // after groups: it wraps the main menu's enter
     debug::Install();
     fixes::Install();
     music::Install();

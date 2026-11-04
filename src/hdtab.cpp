@@ -159,7 +159,7 @@ int Current(int r) {
     case kWidescreen: return settings::Get("Display", "Widescreen", "1") == "0" ? 1 : 0;
     case kHudWidth: return Index(settings::Get("Display", "HudWidth", "auto"), {"auto", "full", "16:9", "4:3"});
     case kControls: return keysets::Modern() ? 1 : 0;  // key set E
-    case kPedestrians: return 0;
+    case kPedestrians: return Index(settings::Get("Game", "Pedestrians", "humans"), {"humans", "zombies"});
     case kDrawDistance:
         return Index(settings::Get("Display", "DrawDistance", "max"), {"original", "far", "further", "max"});
     case kAntialiasing: return Index(settings::Get("Visuals", "Antialiasing", "4x"), {"off", "2x", "4x", "8x"});
@@ -185,6 +185,7 @@ void Store(int r, int v) {
     case kTextures: settings::Set("Visuals", "Textures", kRows[r].words[v]); break;
     case kColour: settings::Set("Visuals", "Colour", kRows[r].words[v]); break;
     case kFrameRate: settings::Set("Visuals", "FrameRate", kRows[r].words[v]); break;
+    case kPedestrians: settings::Set("Game", "Pedestrians", v == 1 ? "zombies" : "humans"); break;
     case kEarlierGroups: settings::Set("Game", "EarlierGroups", v == 0 ? "1" : "0"); break;
     }
 }
@@ -264,7 +265,7 @@ int __fastcall Enter(void* s) {
         kSetSelected(kScreen, kFirstGroup + row, v >= 0 ? g_first[row] + v : -1);
         SetRowState(row, 1);
     }
-    SetRowState(kPedestrians, -1);  // Zombies/Aliens wait for the original disc data
+    At(g_first[kPedestrians] + 2).state = -1;  // Aliens wait for the original disc data
     LockStockYon(Current(kDrawDistance) > 0);
     int saved = Field(kSavedFocus);
     if (saved < 0 || saved > g_lastItem || !At(saved).visible || At(saved).state <= 0) Field(kSavedFocus) = 1;
@@ -280,7 +281,7 @@ int __fastcall Exit(void* s) {
     int r = kGraphicsExit(s);
     for (int row = 0; row < kRowCount; row++) {
         int v = Selected(row);
-        if (v >= 0 && row != kPedestrians) Store(row, v);
+        if (v >= 0) Store(row, v);
     }
     groups::SaveAutoLoad();  // the stock Auto Load row
     input::LoadBindings();  // Controls applies at once

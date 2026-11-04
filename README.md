@@ -73,6 +73,9 @@ Versions and what changed in each: [CHANGELOG.md](CHANGELOG.md). The main menu s
 - Finished race groups can be raced again. Arrows either side of **GROUP** on the main menu (or Left/Right with GROUP selected) go back through the groups you have finished, mission included. A race from an earlier group counts as a replay: you stay in the group you have reached, and winning an old mission doesn't skip you ahead. The original only showed these arrows once the whole game was finished.
 - The game carries on where you left off: it loads your latest save when it starts (the Graphics screen's **Auto Load**, now on by default). The original started a new game every time unless Auto Load was switched on.
 
+**Zombies**
+- Pick **Zombies** under Pedestrians on the HD tab (from the next start of the game), and the pedestrians turn undead: they shamble all the time (the game's drunk power-up, though Groovin' and Panic still take over), their shouts and screams drop to moans, skins go a grubby grey-green, blood goes green, and the game's text says ZOMBIE, as the official zombie patch did. Animals too. It needs no extra files: the original zombie art only ever came on the UK disc.
+
 **Network**
 - LAN games on modern Windows. The game only speaks IPX, which Windows no longer has; the patch carries it over UDP.
 - Join a game over the internet by typing the host's address on the Network screen. Three or more players work too: the host's copy passes on what the joining players send each other.
@@ -166,6 +169,7 @@ Change these on the **HD** tab (Options → Settings → HD) or in `Carma2HD.ini
 | Textures | original, smooth, **sharpest** | Smooth is trilinear with mipmaps. Sharpest is 16x anisotropic with mipmaps. |
 | Colour | 16-bit, **smooth** | Smooth is full-precision colour. 16-bit is the original dithered look. |
 | Frame rate | 60, **auto** | Auto is your screen's refresh rate, capped at 100. |
+| Pedestrians | **humans**, zombies | See [Features](#features). Takes effect the next time the game starts. |
 | Earlier groups | **on**, off | On puts arrows beside the main menu's GROUP, to race finished groups again. Off is the original menu. |
 
 **Auto Load** is the game's own row on the Graphics tab (Options → Settings). It's on by default and kept in `Carma2HD.ini` as `[Game] AutoLoad`.
@@ -309,7 +313,7 @@ Press **Esc** while typing to cancel. Press **Return** on an empty box to clear 
 
 ## Not done yet
 
-- **Zombie and alien pedestrians**, the German and UK releases' modes. They need the original disc data to look right, so the option is greyed out.
+- **Alien pedestrians**, the German release's mode. It needs the original disc data to look right, so the option is greyed out.
 
 ## Building
 

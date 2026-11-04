@@ -37,8 +37,6 @@
 
 #include <cstdint>
 #include <cstring>
-#include <initializer_list>
-#include <utility>
 
 #include "hook.h"
 #include "log.h"
@@ -48,26 +46,6 @@ namespace peds {
 namespace {
 
 constexpr uint8_t kPedBody = 2;
-
-void Rel32(uint8_t* at, uintptr_t to) {
-    int32_t rel = (int32_t)(to - ((uintptr_t)at + 4));
-    memcpy(at, &rel, 4);
-}
-
-// Copies the stub to executable memory, fills its jumps (offset of each rel32
-// -> target) and replaces the 5 or 6 bytes at site with a jump to it.
-bool Divert(uintptr_t site, const uint8_t* old, size_t n, const uint8_t* stub, size_t size,
-            std::initializer_list<std::pair<size_t, uintptr_t>> jumps) {
-    if (!hook::Matches(site, old, n)) return false;
-    uint8_t* code = (uint8_t*)VirtualAlloc(nullptr, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-    if (!code) return false;
-    memcpy(code, stub, size);
-    for (const auto& j : jumps) Rel32(code + j.first, j.second);
-    uint8_t jump[8] = {0xe9, 0, 0, 0, 0, 0x90, 0x90, 0x90};
-    int32_t rel = (int32_t)((uintptr_t)code - (site + 5));  // relative to where it is written
-    memcpy(jump + 1, &rel, 4);
-    return hook::Patch(site, old, jump, n);
-}
 
 }  // namespace
 
@@ -84,7 +62,7 @@ void Install() {
         0x39, 0x9f, 0xf0, 0x00, 0x00, 0x00,  // cmp [edi+0xf0], ebx (moved)
         0xe9, 0, 0, 0, 0,                    // jmp 0x4c2614 (its jne)
     };
-    bool copy = Divert(0x4c260e, copyOld, 6, copyStub, sizeof copyStub, {{19, 0x4c265a}, {30, 0x4c2614}});
+    bool copy = hook::Divert(0x4c260e, copyOld, 6, copyStub, sizeof copyStub, {{19, 0x4c265a}, {30, 0x4c2614}});
     // 0x4b6721: cmp [eax+8], edi (eax = body+0x240, edi = 2; esi = body);
     // jne 0x4b6737 (next body); else 0x4b6726 calls 0x4c2830.
     static const uint8_t moveOld[5] = {0x39, 0x78, 0x08, 0x75, 0x11};
@@ -100,7 +78,7 @@ void Install() {
         // skip:
         0xe9, 0, 0, 0, 0,  // jmp 0x4b6737 (next body)
     };
-    bool move = Divert(0x4b6721, moveOld, 5, moveStub, sizeof moveStub, {{24, 0x4b6726}, {29, 0x4b6737}});
+    bool move = hook::Divert(0x4b6721, moveOld, 5, moveStub, sizeof moveStub, {{24, 0x4b6726}, {29, 0x4b6737}});
     Log("peds: asleep ped bodies keep their animated pose: copy-back %s, drift %s", copy ? "on" : "FAILED",
         move ? "on" : "FAILED");
     if (settings::Get("Network", "Pedestrians", "1") == std::string("1")) {
@@ -116,7 +94,7 @@ void Install() {
             0xb9, 0x1a, 0x00, 0x00, 0x00,              // mov ecx, 0x1a (moved)
             0xe9, 0, 0, 0, 0,                          // jmp 0x4cd1a8
         };
-        bool end = Divert(0x4cd1a3, endOld, 5, endStub, sizeof endStub, {{9, 0x4cd1cd}, {19, 0x4cd1a8}});
+        bool end = hook::Divert(0x4cd1a3, endOld, 5, endStub, sizeof endStub, {{9, 0x4cd1cd}, {19, 0x4cd1a8}});
         Log("peds: pedestrians in network races: spawning %s, no race end when all are killed %s",
             gate ? "on" : "FAILED", end ? "on" : "FAILED");
     }
