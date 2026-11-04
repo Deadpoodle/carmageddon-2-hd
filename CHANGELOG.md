@@ -4,6 +4,11 @@ Carmageddon II HD follows [semantic versioning](https://semver.org/). Until a fi
 
 The game itself is the Steam release, which labels itself `v1.02a`. It is the same build as the official "Super Patch V2.0" (both game exes were built on 30 November 1998). Steam's copy has its CD protection removed, plus an extra import for its CD-music player.
 
+## 0.25.0 (2026-11-04)
+- HD tab settings no longer need a manual restart. Controls and Earlier groups apply at once, as before; leaving the tab with any other row changed saves and restarts the game by itself, without the opening films, straight back to your latest save. In a race, the restart waits for the main menu.
+- The music bar takes effect at once. It used to wait behind the audio already queued.
+- Zombies: skin is a greyer green, and clothes keep their colours, with a little grime.
+
 ## 0.24.0 (2026-11-04)
 - A music volume bar under the effects bar on the Options and pause menus, in place of music On/Off: mouse, or Left/Right on keys and pad. All the way down stops the music. It needs the store's ogg music player in the game folder, which the Steam and GOG releases have.
 

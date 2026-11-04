@@ -58,7 +58,7 @@ Versions and what changed in each: [CHANGELOG.md](CHANGELOG.md). The main menu s
 - Cutscenes enlarged 4x with deband, light sharpening and Lanczos scaling, and shown as large as the screen allows (800x480 of a 16:9 frame instead of 640x384), on true black.
 - Sharper text and HUD art: their textures are enlarged 2x with Scale2x.
 - The CD music plays: a store compatibility shim had stopped it.
-- A music volume bar beside the effects bar, in the Options and pause menus, by mouse, keys or pad. The original only had music On or Off.
+- A music volume bar beside the effects bar, in the Options and pause menus, by mouse, keys or pad, heard at once. The original only had music On or Off.
 
 **Controls**
 - A modern keyboard scheme (W/A/S/D or the arrows), and any action can be put on any key.
@@ -75,7 +75,7 @@ Versions and what changed in each: [CHANGELOG.md](CHANGELOG.md). The main menu s
 - The game carries on where you left off: it loads your latest save when it starts (the Graphics screen's **Auto Load**, now on by default). The original started a new game every time unless Auto Load was switched on.
 
 **Zombies**
-- Pick **Zombies** under Pedestrians on the HD tab (from the next start of the game), and the pedestrians turn undead: they shamble all the time (the game's drunk power-up, though Groovin' and Panic still take over), their shouts and screams drop to moans, skins go a grubby grey-green, blood goes green, and the game's text says ZOMBIE, as the official zombie patch did. Animals too. It needs no extra files: the original zombie art only ever came on the UK disc.
+- Pick **Zombies** under Pedestrians on the HD tab, and the pedestrians turn undead: they shamble all the time (the game's drunk power-up, though Groovin' and Panic still take over), their shouts and screams drop to moans, their skin goes a dead grey-green with grime on their clothes, blood goes green, and the game's text says ZOMBIE, as the official zombie patch did. Animals too. It needs no extra files: the original zombie art only ever came on the UK disc.
 
 **Network**
 - LAN games on modern Windows. The game only speaks IPX, which Windows no longer has; the patch carries it over UDP.
@@ -170,8 +170,10 @@ Change these on the **HD** tab (Options → Settings → HD) or in `Carma2HD.ini
 | Textures | original, smooth, **sharpest** | Smooth is trilinear with mipmaps. Sharpest is 16x anisotropic with mipmaps. |
 | Colour | 16-bit, **smooth** | Smooth is full-precision colour. 16-bit is the original dithered look. |
 | Frame rate | 60, **auto** | Auto is your screen's refresh rate, capped at 100. |
-| Pedestrians | **humans**, zombies | See [Features](#features). Takes effect the next time the game starts. |
+| Pedestrians | **humans**, zombies | See [Features](#features). |
 | Earlier groups | **on**, off | On puts arrows beside the main menu's GROUP, to race finished groups again. Off is the original menu. |
+
+Controls and Earlier groups apply at once. The others can only change as the game starts, so leaving the HD tab with one of them changed saves and restarts the game by itself, straight back to your latest save in a few seconds. Changed during a race, the restart waits until the race is over and you're back at the main menu.
 
 **Auto Load** is the game's own row on the Graphics tab (Options → Settings). It's on by default and kept in `Carma2HD.ini` as `[Game] AutoLoad`.
 

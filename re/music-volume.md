@@ -33,10 +33,17 @@ Options_Enter 0x474530 rebuilds the slider record at 0x763820 on every entry, wi
 
 0 Abort Race, 1 Abort Game, 2 Controls, 3 Settings, 4 Load Game, 5 Volumes label, 6-8 track, 9 Effects label, 10-12 fill, 13 Music label, 14 On, 15 Off, 16 OK, 17 QUIT GAME. Options_Enter uses items 0, 1, 4 and the radio by number (M: nothing else does). Up/Down follow item order. The screen file's count is checked against +0x104 only on the first load; FE_CreateMenu rereads the count after the enter (H).
 
+## Hearing it at once
+
+- `auxSetVolume` scales samples as the player decodes them, so a change waits behind what's queued (buffers of 44100 bytes, 0.25 s each).
+- `waveOutSetVolume` is immediate, but it sets the process's audio session: a test on a handle moved the session volume from 1.00 to 0.25 and read back the same on a second stream. That would move the effects too, so it can't be used.
+- Windows reads a queued buffer as it plays it: with a loopback capture, zeroing the rest of a queued 1.5 s buffer silenced it at that point in the audio, within one 100 ms sample of the test.
+- So the patch hooks the player's imports of waveOutOpen, waveOutWrite and waveOutUnprepareHeader. It keeps each buffer's clean samples, writes them scaled, and rewrites buffers not yet done when the volume changes. The player stays at 100%. A stream that isn't 16-bit falls back to `auxSetVolume`.
+
 ## The patch
 
 - On first entry: items 13-15 become a copy of the track, 16-18 a copy of the fill, both at the Music row; OK and QUIT GAME move to 19 and 20; the label to 21; count 22. Fill items go to group 0, and the radio's first/last are emptied, so the enter's On/Off select writes nothing and Return doesn't treat the bars as a radio row.
 - On every entry: a second record chained after the effects bar.
 - The six tests' 0x80 become 1, so only 0 stops the music. Saved values of 255 and 0 mean what they did.
-- Callback: MVolume = value × 255, `auxSetVolume`, and 0x456530(1) only when crossing 0, which stops or restarts the CD.
+- Callback: MVolume = value × 255, music::SetVolume, and 0x456530(1) only when crossing 0, which stops or restarts the CD.
 - At start-up, after OPTIONS.TXT loads, the saved value is applied.

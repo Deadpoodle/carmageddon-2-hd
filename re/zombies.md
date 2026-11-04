@@ -25,7 +25,7 @@ Read from the instructions (objdump of `CARMA2_HW.EXE`) and the Ghidra caches, a
 
 - `PEDS\PEEPS\<type>.TWT`, `PIXIES.P16`: RGB565, mostly 128², no shade table (H). `<NAME>B` is a bloodied copy, stored right after `<NAME>`. Not every copy lines up with its skin (FEM07's doesn't).
 - Path: 0x406ab0 → LoadPedPeepsArt 0x4cbc10 (call at 0x406ba1) → 0x502cf0 → 0x5024f0 → BrMapAdd, call at 0x502641. Duplicates are freed instead of added. The storage is cleared each race, so skins load per race (H/M).
-- **Patch:** a flag around 0x4cbc10, and the BrMapAdd call recolours type 5 pixelmaps before the first upload. Formula in `tools/zombify.py` and `zombies.cpp`: skin tones go to a rotten grey-green, clothes desaturate and take a grey-green cast, and blotchy grime (hashed value noise) darkens everything. In `<NAME>B`, a texel that differs from `<NAME>` and is red is blood.
+- **Patch:** a flag around 0x4cbc10, and the BrMapAdd call recolours type 5 pixelmaps before the first upload. Formula in `tools/zombify.py` and `zombies.cpp`: flesh tones (hue 8 to 42 degrees, saturation 0.12 to 0.92, which takes in dark skin; tan clothes get caught too) go to a dead grey-green, clothes keep their colour, and blotchy grime (hashed value noise) darkens everything. In `<NAME>B`, a texel that differs from `<NAME>` and is red is blood.
 
 ## Blood
 
@@ -40,7 +40,7 @@ No colour constant in the code; it's all data (M).
 | Tyre trails | GIBSMEAR through LoadPixelmap 0x48ec00, call at 0x4e9ce1. OILSMEAR comes through the same call |
 
 - All the PEDS\GIBLETS art passes the BrMapAdd call during LoadGiblets. **Patch:** a second flag there recolours it; the trail call recolours only GIBSMEAR; chunk colours are overwritten after LoadGiblets.
-- Because blood art loads once at start-up, the setting takes effect at the next start of the game. It's read once, and nothing is installed for Humans.
+- Because blood art loads once at start-up, the setting is read once, at the start, and nothing is installed for Humans. Changing it on the HD tab restarts the game (`src/restart.cpp`).
 
 ## Wording
 

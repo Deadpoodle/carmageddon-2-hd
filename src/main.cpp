@@ -31,6 +31,7 @@
 #include "peds.h"
 #include "actors.h"
 #include "quit.h"
+#include "restart.h"
 #include "log.h"
 #include "settings.h"
 #include "sharptext.h"
@@ -448,6 +449,7 @@ void StartTests() {
 }
 
 void Start() {
+    restart::WaitForOldCopy();  // before the log file and dgVoodoo.conf are touched
     InitializeCriticalSection(&g_logLock);
     char path[MAX_PATH];
     GetModuleFileNameA(nullptr, path, MAX_PATH);
@@ -462,6 +464,7 @@ void Start() {
     }
     if (!loader::Install()) Log("loader hooks FAILED");
     settings::Load();
+    restart::Install();
     quit::Install();
     input::LoadBindings();
     options::Install();

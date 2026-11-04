@@ -23,6 +23,7 @@
 #include "keysets.h"
 #include "log.h"
 #include "options.h"
+#include "restart.h"
 #include "settings.h"
 
 namespace hdtab {
@@ -86,6 +87,7 @@ const float kYon[4] = {0, 50.0f, 70.0f, 100.0f};  // Original keeps the game's o
 int g_first[kRowCount], g_words[kRowCount];  // first word item and word count per row
 int g_lastItem;
 bool g_hdPage;
+int g_atEnter[kRowCount];  // each row's value on entering the screen
 
 void Fill(Item& it, int text, const char* name, int font, int fontLit, int x, int y, int state, int callback) {
     memset(&it, 0, sizeof it);
@@ -261,7 +263,7 @@ int __fastcall Enter(void* s) {
     if (Field(kCount) == kStockItems) Append();
     ShowPage(false);
     for (int row = 0; row < kRowCount; row++) {
-        int v = Current(row);
+        int v = g_atEnter[row] = Current(row);
         kSetSelected(kScreen, kFirstGroup + row, v >= 0 ? g_first[row] + v : -1);
         SetRowState(row, 1);
     }
@@ -279,13 +281,19 @@ int __fastcall Exit(void* s) {
         for (int i = kStockYonFirst; i <= kStockYonLast; i++) At(i).selected = 0;
     }
     int r = kGraphicsExit(s);
+    // Controls and Earlier groups apply at once. dgVoodoo2 reads its settings as
+    // the game starts, and the display, draw distance and pedestrian patches are
+    // laid down then, so the others mean a restart (restart.h).
+    bool restart = false;
     for (int row = 0; row < kRowCount; row++) {
         int v = Selected(row);
         if (v >= 0) Store(row, v);
+        if (v >= 0 && v != g_atEnter[row] && row != kControls && row != kEarlierGroups) restart = true;
     }
     groups::SaveAutoLoad();  // the stock Auto Load row
     input::LoadBindings();  // Controls applies at once
     Log("hdtab: saved (draw distance %d)", dd);
+    if (restart) restart::Request();
     return r;
 }
 

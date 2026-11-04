@@ -15,10 +15,10 @@ from PIL import Image  # noqa: E402
 import pix  # noqa: E402
 import twt  # noqa: E402
 
-DESATURATE = 0.70          # clothes: how much colour goes
-TINT = (0.80, 0.92, 0.68)  # clothes: a grey-green cast
-SKIN = (0.50, 0.62, 0.40)  # skin: the rotten colour, scaled by brightness
-GRIME = 0.45               # how dark the blotches get
+DESATURATE = 0.15          # clothes: they keep their colour...
+TINT = (0.96, 0.96, 0.92)  # ...and just look worn
+SKIN = (0.53, 0.62, 0.47)  # skin: the dead grey-green, scaled by brightness
+GRIME = 0.40               # how dark the blotches get
 BLOOD_DIFF = 40            # a texel this different in <NAME>B may be blood...
 BLOOD_RED = 1.6            # ...if red is this many times green and blue
 
@@ -44,8 +44,12 @@ def grime(x, y):
 
 
 def is_skin(r, g, b):
-    """Warm, moderately saturated: flesh tones, light or dark."""
-    return r > g > b and r - b > 0.08 and (r - g) < 0.9 * (r - b) and r > 0.15 and g > 0.5 * r
+    """Flesh tones, light or dark: orange hues (8 to 42 degrees), neither grey nor neon."""
+    if not r > g > b or r < 0.15:
+        return False
+    hue = 60 * (g - b) / (r - b)
+    saturation = (r - b) / r
+    return 8 <= hue <= 42 and 0.12 <= saturation <= 0.92
 
 
 def zombie(r, g, b, x, y):

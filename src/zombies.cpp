@@ -48,8 +48,8 @@ namespace {
 // ---------------------------------------------------------------------------
 // Recolour (the numbers of tools/zombify.py)
 
-constexpr float kDesaturate = 0.70f, kGrime = 0.45f, kBloodRed = 1.6f;
-constexpr float kTint[3] = {0.80f, 0.92f, 0.68f}, kSkin[3] = {0.50f, 0.62f, 0.40f};
+constexpr float kDesaturate = 0.15f, kGrime = 0.40f, kBloodRed = 1.6f;
+constexpr float kTint[3] = {0.96f, 0.96f, 0.92f}, kSkin[3] = {0.53f, 0.62f, 0.47f};
 constexpr int kBloodDiff = 40;
 
 float Hash(int i, int j, uint32_t seed) {
@@ -74,7 +74,9 @@ float Grime(int x, int y) {
 }
 
 bool IsSkin(float r, float g, float b) {
-    return r > g && g > b && r - b > 0.08f && r - g < 0.9f * (r - b) && r > 0.15f && g > 0.5f * r;
+    if (!(r > g && g > b) || r < 0.15f) return false;  // flesh tones: orange hues, neither grey nor neon
+    float hue = 60 * (g - b) / (r - b), saturation = (r - b) / r;
+    return hue >= 8 && hue <= 42 && saturation >= 0.12f && saturation <= 0.92f;
 }
 
 void Zombie(float* c, int x, int y) {

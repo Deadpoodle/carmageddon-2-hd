@@ -74,7 +74,7 @@ const char* kDefaultIni =
     "AutoLoad=1\r\n"
     "; 1 = arrows beside the main menu's GROUP go back to the groups you have finished, to race them again\r\n"
     "EarlierGroups=1\r\n"
-    "; humans, or zombies: they shamble and moan, grubby and green-blooded (from the next start of the game)\r\n"
+    "; humans, or zombies: they shamble and moan, grubby and green-blooded\r\n"
     "Pedestrians=humans\r\n"
     "\r\n"
     "[Controls]\r\n"
