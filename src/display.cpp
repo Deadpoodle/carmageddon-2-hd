@@ -114,6 +114,25 @@ std::vector<dgvconf::Key> With(std::vector<dgvconf::Key> keys) {
 // README, tools/install-steamdeck.sh): without dinput the patch never runs,
 // and without ddraw/d3dimm Wine's own DirectDraw draws the game, so none of
 // dgVoodoo2's resolution, scaling or filtering apply.
+//
+// On Windows, without dgVoodoo2's files the game gets Windows' own DirectDraw, its
+// driver fails and is unloaded, and the next message to its window crashes the game
+// (a step of the install that's easy to miss: they aren't in the patch's zip). So
+// it says what's missing and closes, before anything changes the display.
+void RequireDgVoodoo() {
+    std::string missing;
+    for (const char* file : {"DDraw.dll", "D3DImm.dll"})
+        if (GetFileAttributesA((GameDir() + file).c_str()) == INVALID_FILE_ATTRIBUTES)
+            missing += std::string("    ") + file + "\n";
+    if (missing.empty()) return;
+    Log("display: dgVoodoo2's files are missing from the game folder; closing");
+    std::string text = "Carmageddon II HD needs dgVoodoo2, and these files aren't in the game folder:\n\n" + missing +
+                       "\nDownload dgVoodoo2 from github.com/dege-diosg/dgVoodoo2/releases and copy them from its "
+                       "MS\\x86 folder to:\n\n    " + GameDir() + "\n\nThe game will now close.";
+    MessageBoxA(nullptr, text.c_str(), "Carmageddon II HD", MB_OK | MB_ICONERROR | MB_TOPMOST | MB_SETFOREGROUND);
+    ExitProcess(1);
+}
+
 void CheckDirectDraw(const char* name, HMODULE m) {
     std::string base = Lower(name ? name : "");
     base = base.substr(base.find_last_of("\\/") + 1);
@@ -122,9 +141,13 @@ void CheckDirectDraw(const char* name, HMODULE m) {
     GetModuleFileNameA(m, path, MAX_PATH);
     std::string dir = path;
     dir.resize(dir.rfind('\\') + 1);
-    if (_stricmp(dir.c_str(), GameDir().c_str()) == 0) return;
-    Log("display: DirectDraw is %s, not dgVoodoo2's DDraw.dll in the game folder: the game will draw at 640x480%s",
-        path, WineVersion() ? " (on Linux/Steam Deck the launch option needs ddraw=n,b and d3dimm=n,b)" : "");
+    if (_stricmp(dir.c_str(), GameDir().c_str()) == 0) {
+        if (!WineVersion()) RequireDgVoodoo();  // D3DImm.dll may still be missing
+        return;
+    }
+    Log("display: DirectDraw is %s, not dgVoodoo2's DDraw.dll in the game folder%s", path,
+        WineVersion() ? " (on Linux/Steam Deck the launch option needs ddraw=n,b and d3dimm=n,b)" : "");
+    if (!WineVersion()) RequireDgVoodoo();
 }
 
 }  // namespace

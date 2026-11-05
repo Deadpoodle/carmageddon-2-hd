@@ -4,6 +4,9 @@ Carmageddon II HD follows [semantic versioning](https://semver.org/). Until a fi
 
 The game itself is the Steam release, which labels itself `v1.02a`. It is the same build as the official "Super Patch V2.0" (both game exes were built on 30 November 1998). Steam's copy has its CD protection removed, plus an extra import for its CD-music player.
 
+## 0.28.3 (2026-11-05)
+- If dgVoodoo2's `DDraw.dll` or `D3DImm.dll` isn't in the game folder, the game now says so, and where to get them, and closes. It used to crash a moment after starting.
+
 ## 0.28.2 (2026-11-05)
 - The game no longer freezes for good when an opponent ends up in the water or otherwise out of the world. The game teleports such a car along its paths until it is further from you than the opponents' view distance, and it had no other way out of that search. That distance follows the draw distance: 45 units in the original, 210 at Max since 0.27.0, and no track has that much room everywhere (Carrier, Funfair, Quarry and Ski Track span under 180 units in all). The distance it asks for now eases down as it searches, so the car still lands about as far off as the track allows, and the search always ends.
 - Water no longer vanishes and trees no longer turn into bare trunks at long draw distances. Both are see-through, and the game keeps see-through surfaces in a 300 KB buffer until the end of each frame, dropping what doesn't fit. That was enough at the original distance, but at Max the far scenery filled it, so what was nearest went missing. The buffer is now 16 MB. Past the sea's outer edge you still see the sky: the levels end there, which the original distance kept out of sight.

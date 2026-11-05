@@ -297,6 +297,7 @@ Press **Esc** while typing to cancel. Press **Return** on an empty box to clear 
 
 - **What the patch did:** `Carma2HD.log` next to the game records each start-up: the settings it read, the patches it applied, and anything that failed.
 - **If the game freezes or crashes:** the log records where. Please include it in any report.
+- **"Carmageddon II HD needs dgVoodoo2" when the game starts:** `DDraw.dll` or `D3DImm.dll` isn't next to `CARMA2_HW.EXE`. They aren't in the patch's zip; see step 2 of [Installing](#installing).
 - **To reset a setting:** delete `Carma2HD.ini`. The next start writes the defaults again.
 - **The picture is in a corner, or the mouse stops partway across the screen:** make sure `dgVoodoo.conf` is in the game folder. The patch keeps its settings in step, but only if the file is there.
 
