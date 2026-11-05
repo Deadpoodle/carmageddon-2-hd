@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 
+#include "driver.h"
 #include "hook.h"
 #include "loader.h"
 #include "log.h"
@@ -126,6 +127,57 @@ HRESULT WINAPI h_Blt(LPDIRECTDRAWSURFACE dst, RECT* dr, LPDIRECTDRAWSURFACE src,
     return o_Blt(dst, dr, src, sr, flags, fx);
 }
 
+// Locking the back buffer fails while the game is minimised, and nothing copes.
+// The D3D driver's lock count 0x1001bbd8 goes up before Lock and stays up if it
+// fails, in the rectangle copy 0x10001b00 and in DirectLock 0x10001d70. The next
+// copy then finds the buffer "already locked" and writes through an unset local
+// (crash at 0x10001c2c, on the first full-screen copy after Alt+Tab), and the
+// game's own 2D code writes through the pixels DirectLock didn't set (0x47d21f).
+// So that Lock can't fail: a failure hands back a private buffer laid out like the
+// last real lock, and its Unlock does nothing. What's drawn there is never shown.
+typedef HRESULT(WINAPI* Lock_t)(LPDIRECTDRAWSURFACE, RECT*, DDSURFACEDESC*, DWORD, HANDLE);
+typedef HRESULT(WINAPI* Unlock_t)(LPDIRECTDRAWSURFACE, void*);
+Lock_t o_Lock;
+Unlock_t o_Unlock;
+volatile DWORD g_failLocksUntil;
+bool g_stockLocks;
+DDSURFACEDESC g_backDesc;  // the back buffer's last real lock
+std::vector<BYTE> g_standIn;
+bool g_standInLocked;
+
+bool IsBackBuffer(LPDIRECTDRAWSURFACE s) {
+    uint8_t* base = driver::Base();
+    return base && s == *(LPDIRECTDRAWSURFACE*)(base + 0x1bc3c);
+}
+
+HRESULT WINAPI h_Lock(LPDIRECTDRAWSURFACE s, RECT* r, DDSURFACEDESC* d, DWORD flags, HANDLE e) {
+    bool forced = g_failLocksUntil && (int)(g_failLocksUntil - GetTickCount()) > 0;
+    HRESULT hr = forced ? DDERR_SURFACELOST : o_Lock(s, r, d, flags, e);
+    bool back = !g_stockLocks && !r && IsBackBuffer(s);
+    if (SUCCEEDED(hr) && d && d->lpSurface) {
+        if (back) g_backDesc = *d;
+        return hr;
+    }
+    static LONG logged;
+    if (InterlockedIncrement(&logged) <= 8)
+        Log("capture: Lock failed: %#lx%s", (unsigned long)hr, back && g_backDesc.lpSurface ? ", drawing to a stand-in" : "");
+    if (!back || !d || !g_backDesc.lpSurface || g_standInLocked) return hr;
+    if (SUCCEEDED(hr)) o_Unlock(s, nullptr);  // locked, but with nowhere to draw
+    g_standIn.resize((size_t)g_backDesc.lPitch * g_backDesc.dwHeight);
+    *d = g_backDesc;
+    d->lpSurface = g_standIn.data();
+    g_standInLocked = true;
+    return DD_OK;
+}
+
+HRESULT WINAPI h_Unlock(LPDIRECTDRAWSURFACE s, void* rect) {
+    if (g_standInLocked && IsBackBuffer(s)) {
+        g_standInLocked = false;
+        return DD_OK;
+    }
+    return o_Unlock(s, rect);
+}
+
 HRESULT CreateSurfaceCommon(CreateSurface_t real, void* dd, DDSURFACEDESC* desc, LPDIRECTDRAWSURFACE* out,
                             IUnknown* outer) {
     HRESULT hr = real(dd, desc, out, outer);
@@ -137,6 +189,13 @@ HRESULT CreateSurfaceCommon(CreateSurface_t real, void* dd, DDSURFACEDESC* desc,
         if (!o_Flip) {
             hook::Import(Slot(g_primary, kFlip), (Flip_t)&h_Flip, &o_Flip);
             hook::Import(Slot(g_primary, kBlt), (Blt_t)&h_Blt, &o_Blt);
+            char stock[4] = "";
+            g_stockLocks = GetEnvironmentVariableA("C2HD_STOCK_LOCKS", stock, sizeof stock) && stock[0] == '1';
+            Log("capture: back buffer always locks: %s",
+                hook::Import(Slot(g_primary, kLock), (Lock_t)&h_Lock, &o_Lock) &&
+                        hook::Import(Slot(g_primary, kUnlock), (Unlock_t)&h_Unlock, &o_Unlock)
+                    ? (g_stockLocks ? "left as the original (C2HD_STOCK_LOCKS)" : "on")
+                    : "FAILED");
         }
     }
     return hr;
@@ -187,6 +246,8 @@ HRESULT WINAPI h_DirectDrawCreate(GUID* guid, LPDIRECTDRAW* out, IUnknown* outer
 }  // namespace
 
 void Install() { loader::Redirect("DirectDrawCreate", (void*)&h_DirectDrawCreate, (void**)&o_DirectDrawCreate); }
+
+void FailLocks(unsigned ms) { g_failLocksUntil = GetTickCount() + ms; }
 
 void Request() { InterlockedExchange(&g_pending, 1); }
 

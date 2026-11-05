@@ -156,3 +156,9 @@ address	name	note
 10038a6c	gModeEnumIndex	
 10038a80	gShadowBuffer	static 0x96000 = 640x480x16
 ```
+
+## Lock failures (the Alt+Tab crash)
+
+The lock count 0x1001bbd8 goes up before Lock and down after Unlock, in the rectangle copy 0x10001b00 and in DirectLock 0x10001d70 / DirectUnlock 0x10001e40 (H). Both leave it up when Lock fails (0x10001bc4, and 0x10001e2c for DirectLock), and nothing resets it. With the count stuck, the next copy sees 2, skips Lock at 0x10001b85, and uses the unset local [ebp-0x68] as its destination: `rep movs` at 0x10001c2c. A failed DirectLock also leaves pixelmap +8 unset, and the game's own 2D code writes through it (0x47d21f) (H, both reproduced with `LOCKFAIL`).
+
+The fix is in capture.cpp, not here: the back buffer's Lock (slot 25, compared with the driver's surface at 0x1001bc3c) can't fail. A failure returns a private buffer laid out like the last real lock, and the matching Unlock (slot 32) does nothing. Patching the driver alone wasn't enough, because of 0x47d21f.

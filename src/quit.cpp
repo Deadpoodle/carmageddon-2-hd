@@ -25,6 +25,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include "gamestate.h"
 #include "hook.h"
 #include "log.h"
 #include "publicaddr.h"
@@ -76,23 +77,30 @@ void LogMainThread() {
 namespace {
 
 // A hang: the game's window stops answering messages (the game pumps them
-// every frame, menus and races alike) for a few seconds. Then the main
-// thread's stack goes to the log, three samples a second apart, once per hang.
+// every frame, menus and races alike) for a few seconds. Then what the game was
+// doing and the main thread's stack go to the log, three samples of the stack a
+// second apart, once per hang; a line says when it answers again, which tells a
+// long load from a freeze.
 HWND* const kWindow = (HWND*)0x6ad4c8;
 
 DWORD WINAPI HangWatch(void*) {
     bool logged = false;
+    DWORD hungAt = 0;
     for (;;) {
         Sleep(1000);
+        gamestate::Poll();
         HWND hwnd = *kWindow;
         if (!hwnd || IsIconic(hwnd)) continue;  // the game waits by design while minimised
         DWORD_PTR r;
         if (SendMessageTimeoutA(hwnd, WM_NULL, 0, 0, SMTO_NORMAL, 3000, &r)) {
+            if (logged) Log("hang: the game answers again, after about %lu s", (unsigned long)((GetTickCount() - hungAt) / 1000));
             logged = false;
             continue;
         }
         if (logged) continue;
         logged = true;
+        hungAt = GetTickCount() - 3000;
+        gamestate::LogSnapshot();
         for (int i = 0; i < 3; i++) {
             Log("hang: the game hasn't answered its window for 3 s (sample %d)", i + 1);
             LogMainThread();
@@ -104,6 +112,7 @@ DWORD WINAPI HangWatch(void*) {
 DWORD WINAPI Guard(void*) {
     Sleep(kGraceMs);
     Log("quit: the game's shutdown didn't finish in %lu ms; ending the process", (unsigned long)kGraceMs);
+    gamestate::LogSnapshot();
     LogMainThread();
     TerminateProcess(GetCurrentProcess(), 0);
     return 0;

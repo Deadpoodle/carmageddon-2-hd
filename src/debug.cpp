@@ -158,12 +158,21 @@ void __fastcall Headups(void* car) {
     if (g_on) Draw();
 }
 
+// C2HD_NO_AI=1 (tests): opponents and cops sit on the grid and leave the player
+// alone. MungeOpponents 0x4a9e10 (its one call is at 0x401346) is all of their
+// thinking, so it just doesn't run; their cars are still solid and can be hit.
+void SkipOpponents() {}
+
 }  // namespace
 
 void Install() {
     g_on = settings::Get("Debug", "Overlay", "0") == std::string("1");
     bool ok = hook::Redirect(0x4e53fe, 0xe8, 0x449b10, (const void*)&Headups);
     Log("debug: overlay (F2 in races) %s, %s", ok ? "ready" : "hook FAILED", g_on ? "on" : "off");
+    char v[4] = "";
+    if (GetEnvironmentVariableA("C2HD_NO_AI", v, sizeof v) && v[0] == '1')
+        Log("debug: test: opponents' AI off: %s",
+            hook::Redirect(0x401346, 0xe8, 0x4a9e10, (const void*)&SkipOpponents) ? "on" : "FAILED");
 }
 
 void OnKeys(const BYTE* keys) {
