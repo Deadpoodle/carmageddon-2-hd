@@ -101,7 +101,57 @@ It picks the highest LOD whose threshold car+0xe1c[i] is below d. Every shipped 
 - 0x4a9550, every frame from DoOpponents 0x4a9e10: opponent+0x18 = distance from the opponent to the **player car** (0x75bc3c), and the time stamp opponent+0x68 is refreshed while that distance is < gIn_view_distance (H).
 - 0x4aa570: 3000 ms after the last refresh, the opponent starts to cheat (flag 0x20 in +0xb0). On a follow-path objective, ProcessFollowPath 0x4af960 then "Dematerialises" it: TurnOpponentPhysicsOff 0x4a79a0 (render_style 1, off the active car list), and it travels along its path without physics. Back within range, 0x4a7f20 / 0x4a8170 -> RematerialiseOpponent 0x4a87a0 puts it back on the path with physics on. Cop cars (id >> 8 == 3) have their physics turned off directly in 0x4aa570 ("StartToCheat - Turning physics off", call at 0x4aa793) and are sent back to their start point when far (0x4abc40) (H for the calls, M for the objective names).
 - Because gIn_view_distance (gYon + 10) exceeds the cull distance (gYon), rematerialising should always happen out of sight (H when mult = 1).
-- **The patch already changes this**: gYon is 100 when InitOpponents runs (ApplyDrawDistance runs at start-up, hdtab.cpp), so the in-view distance is 110 instead of 45. Opponents within 110 units of the player keep real physics and AI; vanilla gave up at 45. Cost: more cars in the physics and collision step. Effect: opponents ahead or behind you race "for real" instead of being moved along the path (M). The value is fixed per race, so changing Draw distance mid-race affects only the next race.
+- **The patch already changes this**: gYon is 200 at Max when InitOpponents runs (ApplyDrawDistance runs at start-up, hdtab.cpp), so the in-view distance is 210 instead of 45 (Far 80, Further 110). Opponents within that distance of the player keep real physics and AI; vanilla gave up at 45. Cost: more cars in the physics and collision step. Effect: opponents ahead or behind you race "for real" instead of being moved along the path (M). The value is fixed per race, so changing Draw distance mid-race affects only the next race.
+- **Real physics at range means they can leave the road where the player can't see.** In vanilla a car over 45 units away soon runs along its path with no physics and can't fall in the water; at 210 most cars keep physics all race, and on the smaller tracks all of them do (H for the rule, M for how often it happens).
+- **Don't lower it to dodge that.** A cheating car isn't drawn, so the distance has to stay above the cull distance (section 5.3).
+
+### 3.4 Out of the world: the teleport, and the freeze it caused
+
+- 0x4ace70, per opponent every 500 ms (+0x4c): HasCarFallenOffWorld 0x442130, then Teleport 0x4a9180 and objective 4. 0x442130 asks for the ground under the car (0x4e4600, below -100 means none; with nudges of 0.05) or a ground material whose name starts with `^` (H). New City has none of those materials, so there it is no ground (M). The other caller of 0x4a9180 is 0x4a914d.
+- 0x4a9180 turns physics off, then walks a random route (TopUp 0x4a93c0, nodes in 0x761a40, sections in 0x761a44): each step moves the car to the next node and measures it with 0x4a9550. **The loop 0x4a9293..0x4a93a5 had one exit: distance > gIn_view_distance (0x4a933f)** (H).
+- At Max that is 210. Node spans from the race files: Carrier 128, Quarry 154, Funfair 158, Ski Track 175, so no node can ever qualify there; Timber 218 (89% of nodes have none in range), New City 266 (54%), Junkyard 288 to 296, Silo 280, Airport 358, Desert 379. From New City 3's start grid the furthest node is 172. At 45 no racing track has the problem; the 2-node network arenas would, but they have no opponents.
+- Seen in a real race: the hang log's stack, all samples under 0x4acebe, EIP in 0x4a9428..0x4a95c8 (0x4a93c0 and 0x4a9550). Reproduced hidden with the stock loop, once by chance and every time with `C2HD_FORCE_FALL`.
+- The guard (fixes.cpp) replaces the test at 0x4a933c. The first fill of the route (call at 0x4a9289) resets it; the distance wanted drops 10% every 64 steps, with a hard stop at 4096. Measured on New City 3 over 15 forced falls: cars land 138 to 193 units away after 66 to 258 steps.
+- A car put back within the view distance is safe: 0x4b1153 sends any car with neither physics (8) nor cheating (0x20) to 0x4a8170, which turns physics back on. That doesn't depend on distance, and stock reaches the same state (H). In the test all cars came back with physics on.
+
+### 3.6 The primitive heap: missing water and bare trees
+
+- BrZbBegin 0x525d20 takes the primitive heap, called at 0x4e4b00 with 0x6baa40 and 300,000 bytes. The heap struct is 0x79f4b0 (base, size, current); 0x522ddc sets current = base each frame and token 0x103 hands it to the renderer, with the order table at 0x79f4a4 (token 0x102) (H). The [0x79f4b8] field did not track use in a test (always 140184), so don't measure with it.
+- Translucent faces wait there for the end of the frame, and what doesn't fit is dropped (M for the mechanism, H for the effect). Tested on New City 3 by flying the camera along the path sections with a temporary hook on the call at 0x4940f7 (it runs just before the view matrix is taken at 0x49410f), one shot per pose:
+  - At pose (-47.8, 2.0, 48.5) the sea is present at Yon 35, 70 and 100 and missing at 200. At Yon 200 it comes back with YonFactor 0.5 and is gone at 0.75: the amount drawn decides, not the yon.
+  - With the stock heap, trees are bare trunks at the same frames where the larger heap draws them whole.
+  - 400 KB still loses faces in all four test views; 800 KB, 1600 KB and 3200 KB match 16 MB exactly. Frame rate didn't change.
+- The same buffer and size also go to 0x4c6510 from 0x4b5ca0, so the game shared it with another user. That user keeps it.
+- **Not a bug:** the sea is a ring about one original Yon wide, with nothing beyond it in the level file. At (60, 65) there's no geometry to the east at all, and that view is sky at every draw distance, including Original at 4:3.
+- Rejected on the way: track-cell culling 0x40d7c0 walks the whole footprint with no cap, and 0x58f490 (default 1) is a developer toggle between cell slots +0 and +4.
+
+### 2.4 Wrecks and the pile-ups
+
+- A drone is 0x5d8 bytes (array [0x684504], count 0x6820d0). +4 type (+0x2c flags: 2 can reset, 4 always processed), +0x30 time it took its state, +0x38 state, +0x3c/+0x40 previous states, +0x44 processed, +0x45 in the near box, +0xec actor, +0xf8 physics body (H for the offsets, M for the flag names).
+- State routines are at 0x594738 + state x 4, called with ecx = drone and edx = command (0 start, 1 run, 2 processing off, 4 stop): 1 Reset 0x44cc70, 2 ControlledMovement 0x44d1d0, 3 PhysicsActive 0x44eb70, 4 StationaryPassive 0x44ec50 (H). 5 is a drone below the world (0x451415).
+- A hit runs MyDroneHathCollideth 0x452230 (state 3); coming to rest runs MyDroneHathHalteth 0x452360 (state 4). Both states stay until +0x44 is 0, unless the type has flag 4 and has left the near box (H). There is no timer and no test of the camera.
+- PROCESSING OFF 0x451710 (ecx = drone, edx = force) clears +0x44. **Without force it skips a drone in state 3**, so a car still being knocked about never stops (H).
+- Reset then runs SemiInitDroneSpec (0x44ce3b onwards): back to its start, with physics off. Processing starts again only outside the near box (section 2.2), so neither end is seen (H).
+- Measured on New City 3 at Max, player parked: stopped and piled cars after 30 s, 45 s, 60 s: 28, 38, 39 of 77 as stock. actors.cpp wraps states 3 and 4: after 4 s with +0x44 set, flag 2 and not flag 4, a car not in the near box, or 15+ units off and outside the camera's field of view, gets 0x451710 with force. Then 9, 6, 5, and 3 by 72 s. "Moving" drops from about 40 to about 21 while parked, because cars at home inside the near box can't start until the player moves.
+
+### 2.5 Traffic at twice the original, and the fade
+
+- Following k (86 / 103 at Max, caps 64) was too much traffic: wreck clearing alone left pile-ups in view. The boxes are now fixed at twice the original at every setting but Original (near 30 / 24 / 30, far 36 / 26 / 36) with caps of 20 drawn and 24 moving. PCGamingWiki has no traffic tweak; 2x is the rule of its two tweaks, `Yon` 35 to 70 and pedestrians 12 / 9 to 24 / 18.
+- Flying the camera along the race paths at driving pace on New City 3: 24 moving, at worst 7 stopped and 5 piled, then none. **A parked player sees no traffic at this size**, so parked tests measure nothing.
+- trafficfade.cpp: opacity follows the car's margin inside the near box, measured from the test centre 0x6820c0 on each axis, so there are no timers and it works both ways. Five levels over the last 4 units. At 8 units a third of the drawn cars were see-through at any moment, right beside solid ones (the zone is 46% of the box); at 4 it is 11 to 13% of them, none nearer than 21 units. Opacity belongs to a material and cars of a type share theirs, so each level is a copy of the model (BrModelAllocate) with faces on copies of the materials (BrMaterialAllocate), extra_prim = {BLEND_B 1, OPACITY_X n}; a level is chosen by pointers in the actor.
+- Layout (H, read from live data): a car's top actor (drone+0xec) has no model; the parts are its children, and **its `next` is the rest of the world**, so walk children only. Vertices and faces are 40 bytes, and **a face's material is at +8**. A null face material means the actor's (+0x1c): all of a wheel's faces and some of the body's, so the actor's material needs a level too. Models are shared by the drones of a type.
+- A car that is hit takes a model from a pool for its type: the faces are shared, the vertices its own to dent, the slot marked at type+0x80, and that model has no faded copies. So cars in states 3 and 4 stay solid; otherwise the body stays solid while the wheels fade. Its materials are the originals, so a hit never leaves a car see-through (checked on live models). Reset puts the body back on its base model (0x44cf33, table 0x76236c, index type+0x78) whatever level it was at, so the level is set every frame.
+- Built after InitDrones (call at 0x401144), freed by a detour of 0x44fc10, which nothing calls directly; models go back to the originals first. Five races in a row, on and off: same memory at the end (207.0 and 207.7 MB), same frame rate. New City has 25 models and 55 materials to copy; Quarry and Timber have no road cars.
+
+### 3.5 What else the scaled values reach
+
+Checked every read of gYon, gIn_view_distance, gYon_squared, the four pedestrian distances and the two drone counters, for a loop that depends on them to end (H):
+
+- gIn_view_distance: only the loop above. 0x4a95cd and 0x4abcc1 are single comparisons.
+- 0x4abcc1 sends a far cop back to its start only if that start is over gIn_view_distance from the player, so at 210 this rarely or never happens on the smaller tracks (behaviour, not a fault).
+- Pedestrian distances: comparisons only, in UpdatePeds' fixed loop 0x4d380d..0x4d3925. More awake pedestrians can fill the AI pool, but 0x4d3aff takes the least recently used record when all 100 are in use, so it can't overrun.
+- Drone counters: compared with the caps and counted up and down, and never used as indexes.
+- gYon: the rest is cameras, fog and the menu.
 
 ## 4. Relation to yon, view width and fog
 
@@ -127,6 +177,8 @@ It picks the highest LOD whose threshold car+0xe1c[i] is below d. Every shipped 
 Make the distances one function of our DrawDistance setting, with Original = stock values. Let k = Yon/35: 1.43 for Far (50), 2.0 for Further (70), 2.86 for Max (100).
 
 ### 5.1 Drones (cheapest, biggest visible win)
+
+Done, then taken back: scaling the boxes by k caused pile-ups, so traffic is now fixed at 2x with a fade (section 2.5). What follows is the original plan.
 
 - Scale the CAR boxes by k: near 15/12/15 and far 18/13/18 (keep the 3-unit hysteresis, or scale it too). Planes and trains need little change, they are already 40-50.
 - Do it by **redirecting the fcomp operands** to our own floats, not by writing the .rdata constants:

@@ -15,6 +15,7 @@
 #include "display.h"
 #include "fixes.h"
 #include "frontend.h"
+#include "gamestate.h"
 #include "groups.h"
 #include "hdtab.h"
 #include "icons.h"
@@ -136,6 +137,7 @@ LONG CALLBACK CrashLogger(EXCEPTION_POINTERS* ep) {
         }
         shown++;
     }
+    gamestate::LogSnapshot();
     return EXCEPTION_CONTINUE_SEARCH;
 }
 

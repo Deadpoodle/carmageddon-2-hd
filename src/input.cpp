@@ -34,6 +34,8 @@
 #include "debug.h"
 #include "keysets.h"
 #include "frontend.h"
+#include "capture.h"
+#include "gamestate.h"
 #include "headless.h"
 #include "hook.h"
 #include "log.h"
@@ -401,6 +403,8 @@ struct Step {
                           // tour with long steps can use small times and WAITs)
     int powerup = -1;     // POWERUP=n: give the player power-up n (in a race)
     bool dumpMap = false; // DUMPMAP: save the race's map pixelmap (shots\map_N.raw)
+    bool state = false;   // STATE: what the game is doing, to the log, as a hang would
+    int failLocks = 0;    // LOCKFAIL=ms: every surface Lock fails for that long
 };
 
 // A scripted key press as a person makes it: down for a few menu frames, then
@@ -426,6 +430,11 @@ DWORD WINAPI ScriptThread(void*) {
                 g_givePowerup = s.powerup;
             } else if (s.dumpMap) {
                 g_dumpMap = true;
+            } else if (s.state) {
+                gamestate::LogSnapshot();
+            } else if (s.failLocks) {
+                Log("script: every Lock fails for %d ms", s.failLocks);
+                capture::FailLocks((unsigned)s.failLocks);
             } else if (s.finish >= 0) {
                 g_finish = s.finish;
             } else if (s.allCars) {
@@ -513,6 +522,8 @@ void StartScript(const char* script) {
     // KEYSWEEP[=S] presses Down (or S) round the screen and logs what it reaches;
     // GOTO=Settings presses Down until that item has the focus.
     // POWERUP=n gives the player power-up n (a line of POWERUP.TXT, from 0).
+    // STATE logs what the game is doing, as a hang would.
+    // LOCKFAIL=ms fails every surface Lock for that long, as minimising the game does.
     std::string s = script;
     size_t pos = 0;
     while (pos < s.size()) {
@@ -550,6 +561,8 @@ void StartScript(const char* script) {
             else if (name.rfind("WAIT=", 0) == 0) st.wait = (DWORD)(atof(name.c_str() + 5) * 1000);
             else if (name.rfind("POWERUP=", 0) == 0) st.powerup = atoi(name.c_str() + 8);
             else if (name == "DUMPMAP") st.dumpMap = true;
+            else if (name == "STATE") st.state = true;
+            else if (name.rfind("LOCKFAIL=", 0) == 0) st.failLocks = atoi(name.c_str() + 9);
             else if (name == "FINISH") st.finish = 0;
             else if (name == "ALLCARS") st.allCars = true;
             else if (name.rfind("FINISH=", 0) == 0) st.finish = atoi(name.c_str() + 7);

@@ -47,3 +47,11 @@ Options_Enter 0x474530 rebuilds the slider record at 0x763820 on every entry, wi
 - The six tests' 0x80 become 1, so only 0 stops the music. Saved values of 255 and 0 mean what they did.
 - Callback: MVolume = value × 255, music::SetVolume, and 0x456530(1) only when crossing 0, which stops or restarts the CD.
 - At start-up, after OPTIONS.TXT loads, the saved value is applied.
+
+## Choosing a track
+
+- 0x4566d0 (ecx = sound ID) handles three random requests (H): 0x270d races (list 0x595ca8, IDs 9604..9607), 0x270e menus (0x595c98, 9600..9603) and 0x270f everything (0x595c78, 9600..9607). 0x595c20 keeps the request for when a track ends.
+- SOUND.TXT gives 9600..9607 to CD tracks 2..9. The store's music folder stops at Track08.ogg, so 9607 has no file and races have three real songs (H). What the player does with the missing track wasn't tested.
+- The pick is 0x513520 at 0x4567ae, 0x4567c3 and 0x4567d8, in a loop that repeats while the result equals the last ID, 0x595c50 (H). A replacement that returns the last ID hangs the game.
+- The game seeds rand from the clock at 0x47dd8b. Its other srand calls mostly save and restore around effects, so they aren't what makes the music repeat (M).
+- music.cpp redirects those three calls to a shuffle. Heard flags are per ID, so the "everything" list shares its round with the other two.

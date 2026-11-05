@@ -50,7 +50,7 @@ Versions and what changed in each: [CHANGELOG.md](CHANGELOG.md). The main menu s
 - Widescreen and ultrawide (21:9, 32:9) with a wider view (Hor+), not a stretched one.
 - The race HUD spread to the screen's edges (or kept to 16:9, 4:3 or 21:9), with the gaps in the top banner filled.
 - Menu and loading pictures stretched to fill a wide screen, with the menus themselves kept at their original shape in the middle. The mouse reaches the whole screen, edge to edge.
-- Scenery drawn up to nearly six times as far as the original, and pedestrians, traffic and opponents' detailed models with it, so they no longer pop in just ahead of you.
+- Scenery drawn up to nearly six times as far as the original, and pedestrians and opponents' detailed models with it, so they no longer pop in just ahead of you. Traffic is drawn twice as far and fades in and out at that distance.
 
 **Visuals**
 - Anti-aliasing (2x, 4x or 8x), 16x anisotropic texture filtering with mipmaps, and full-precision colour instead of 16-bit dithering. These three are dgVoodoo2's work, so they are Windows only.
@@ -94,6 +94,11 @@ Versions and what changed in each: [CHANGELOG.md](CHANGELOG.md). The main menu s
 - Alt+Tab works. Windows' own compatibility fix for this game blocks it with a keyboard hook, which the patch declines. The game pauses while you're away.
 - Moving up or down the pause menu in a race no longer ends the race. In the original, landing on **Abort Race** with the keys (or wrapping round to it from QUIT GAME) aborted the race without a press of Return.
 - The time bonus at the end of a race can't go negative. In the original, if the game clock stepped back while the bonus counted up, a 32-bit overflow gave a bonus of minus millions and the race timer started climbing.
+- Water and tree leaves stay on screen at long draw distances. The game drops see-through surfaces when a small buffer fills, which a longer view makes it do. The buffer is larger now.
+- Traffic doesn't pile up. Cars that have been hit go back to their start once you can't see them, instead of staying in the road for the next car to hit.
+- Music is shuffled: every track plays once before any plays again, and the race list's missing track is skipped.
+- No crash on Alt+Tab. The game's Direct3D driver didn't recover when drawing failed while minimised.
+- No freeze when an opponent ends up in the water. The game's search for somewhere to put it back had no way out if nowhere was far enough from you, which a longer draw distance makes likely. The search now always ends.
 
 **Extras**
 - A debug overlay (F2 in a race): frame rate, positions and more, for bug reports.

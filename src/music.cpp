@@ -6,6 +6,16 @@
 // the exe), so opening the CD fails (MCI error 266) and no music plays. Here
 // the folder's winmm.dll is loaded by its full path and the exe's
 // mciSendCommandA import is pointed at it.
+//
+// The choice of track is ours too. The game (0x4566d0) picks at random from one
+// of three lists of sound IDs and only refuses the last ID played (0x595c50), so
+// A-B-A is common. Its lists are short: 9600..9603 for menus, 9604..9607 for races
+// and all eight for network games, IDs that SOUND.TXT gives to CD tracks 2..9. But
+// the store's music stops at Track08, so a race has three songs and a one in four
+// chance of a track that isn't there. Each of its three calls to the random routine
+// now comes here, for a shuffle: every track that exists once, in a random order,
+// then again in another. Never the last ID, because the game's loop asks again
+// until it gets a different one.
 #include "music.h"
 
 #include <windows.h>
@@ -13,6 +23,8 @@
 #include <mmsystem.h>
 
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <vector>
 
 #include <cstring>
@@ -109,6 +121,88 @@ void HookVolume(HMODULE winmm) {
     Log("music: volume through %s", g_scaling ? "its queued buffers" : g_auxSetVolume ? "the player" : "nothing");
 }
 
+constexpr int kFirstId = 9600, kFirstTrack = 2, kIds = 8;
+int* const kLastId = (int*)0x595c50;
+bool g_exists[kIds];
+bool g_heard[kIds];  // played in this round of the shuffle
+uint32_t g_random;
+
+uint32_t Random() {  // xorshift: the game's own is reseeded around its effects
+    g_random ^= g_random << 13;
+    g_random ^= g_random >> 17;
+    g_random ^= g_random << 5;
+    return g_random;
+}
+
+// One of the list's tracks at random, among those that qualify; -1 if none do.
+int Choose(const int* list, int count, bool mustExist, bool unheard) {
+    int chosen = -1, seen = 0;
+    for (int i = 0; i < count; i++) {
+        int k = list[i] - kFirstId;
+        if (list[i] == *kLastId || k < 0 || k >= kIds || (mustExist && !g_exists[k]) || (unheard && g_heard[k])) continue;
+        if (Random() % (uint32_t)++seen == 0) chosen = i;
+    }
+    return chosen;
+}
+
+// The index in list of the track to play.
+int Pick(const int* list, int count) {
+    int chosen = Choose(list, count, true, true);
+    if (chosen < 0) {  // the round is over
+        for (int i = 0; i < count; i++)
+            if (list[i] >= kFirstId && list[i] < kFirstId + kIds) g_heard[list[i] - kFirstId] = false;
+        chosen = Choose(list, count, true, false);
+    }
+    if (chosen < 0) chosen = Choose(list, count, false, false);  // only the last one exists: anything else ends the loop
+    if (chosen < 0) return 0;
+    int k = list[chosen] - kFirstId;
+    g_heard[k] = true;
+    Log("music: track %d next", k + kFirstTrack);
+    return chosen;
+}
+
+// In place of the random routine 0x513520 (fastcall lowest, highest).
+template <uintptr_t list>
+int __fastcall PickFrom(int, int highest) {
+    return Pick((const int*)list, highest + 1);
+}
+
+void InstallPicker() {
+    char stock[4] = "";
+    if (GetEnvironmentVariableA("C2HD_STOCK_MUSIC", stock, sizeof stock) && stock[0] == '1') {
+        Log("music: choice of track left as the original (C2HD_STOCK_MUSIC)");
+        return;
+    }
+    int found = 0;
+    for (int k = 0; k < kIds; k++) {
+        char path[MAX_PATH];
+        snprintf(path, sizeof path, "%sMUSIC\\Track%02d.ogg", GameDir().c_str(), k + kFirstTrack);
+        g_exists[k] = GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES;
+        found += g_exists[k];
+    }
+    if (!found)  // a real CD: nothing to go on, so all of them
+        for (bool& exists : g_exists) exists = true;
+    LARGE_INTEGER now;
+    QueryPerformanceCounter(&now);
+    g_random = (uint32_t)now.QuadPart | 1;
+    bool ok = hook::Redirect(0x4567ae, 0xe8, 0x513520, (const void*)&PickFrom<0x595c78>) &&  // all eight
+              hook::Redirect(0x4567c3, 0xe8, 0x513520, (const void*)&PickFrom<0x595c98>) &&  // menus
+              hook::Redirect(0x4567d8, 0xe8, 0x513520, (const void*)&PickFrom<0x595ca8>);    // races
+    Log("music: shuffling %d tracks: %s", found ? found : kIds, ok ? "on" : "FAILED");
+
+    char test[8] = "";  // C2HD_MUSIC_TEST=n (tests): n choices from each list, to the log
+    if (!GetEnvironmentVariableA("C2HD_MUSIC_TEST", test, sizeof test)) return;
+    static const struct { const char* name; uintptr_t list; int count; } kLists[] = {
+        {"all", 0x595c78, 8}, {"menus", 0x595c98, 4}, {"races", 0x595ca8, 4}};
+    int last = *kLastId;
+    for (const auto& l : kLists) {
+        Log("music: test: %s", l.name);
+        for (int i = 0; i < atoi(test); i++) *kLastId = ((const int*)l.list)[Pick((const int*)l.list, l.count)];
+    }
+    *kLastId = last;
+    memset(g_heard, 0, sizeof g_heard);
+}
+
 }  // namespace
 
 void SetVolume(int volume) {
@@ -129,6 +223,7 @@ void SetVolume(int volume) {
 }
 
 void Install() {
+    InstallPicker();
     std::string path = GameDir() + "winmm.dll";
     if (GetFileAttributesA(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
         Log("music: no winmm.dll in the game folder; CD music left to the system");

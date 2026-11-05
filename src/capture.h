@@ -9,4 +9,7 @@ void Install();
 // Save the next presented frame to shots\NNNN.bmp in the game folder.
 void Request();
 
+// Tests: every Lock fails for this long, as they do while the game is minimised.
+void FailLocks(unsigned ms);
+
 }  // namespace capture
